@@ -1,1 +1,3 @@
-This is the README for the project. It will be written later.
+# Calorie Tracker
+
+A web-based calorie tracking application that allows users to search for foods, log meals, and analyze dietary intake.
