@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Calorie Tracker</title>
+</head>
+
+<body>
+    <main>
+
+    <h1>Calorie Tracker</h1>
+
+    <form action="/handle_form" method="POST">
+        <input type="text" name="query">
+    </form>
+
+    <div id="dashBoard">
+       <h2>Daily Nutrients</h2> 
+
+       {% for nutrient_type, amount in totals.items()%}
+        <p>{{nutrient_type}}: {{amount}}</p>
+       {% endfor %}
+       <h3></h3> 
+    </div>
+    
+
+    <div id="searchResults">
+        <ul>
+        {% for result in results %}
+            <li>
+                <h5>{{result["name"]}}</h5>
+                {% for nutrient, value in result.items() if nutrient != "name" and nutrient != "fdc_id"%}
+                <p>{{nutrient}}: {{value}}</p>
+                {% endfor %}
+                
+                <form action="/update_log" method="POST">
+                    <input type="hidden" name="fdc_id" value="{{result['fdc_id']}}">
+
+                    <input type="number" name="quantity" min="1" value="1">
+                    <button type="submit">Add to log</button>
+                </form>
+            </li>
+        {% endfor %}
+
+        </ul>
+    
+    </div>
+</main>
+
+</body>
+    
+
+
+</html>
