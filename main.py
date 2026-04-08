@@ -1,4 +1,4 @@
-from ui.ui import launch_ui
+from ui.ui import app
 
 if __name__ == "__main__":
-    launch_ui()
+    app.run(debug=True)
