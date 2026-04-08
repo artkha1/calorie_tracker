@@ -2,16 +2,258 @@
 <html>
 <head>
     <title>Calorie Tracker</title>
-</head>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
 
+        h1 {
+            color: #2e7d32;
+        }
+
+        h2 {
+            color: #333;
+        }
+
+        .search-bar {
+            margin-bottom: 20px;
+        }
+
+        .search-bar input[type="text"] {
+            padding: 8px;
+            width: 300px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        .search-bar button {
+            padding: 8px 16px;
+            background-color: #2e7d32;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .search-bar button:hover {
+            background-color: #1b5e20;
+        }
+
+        .main-content {
+            display: flex;
+            gap: 30px;
+            align-items: flex-start;
+        }
+
+        .results-section {
+            flex: 1;
+        }
+
+        .right-side {
+            flex: 1;
+        }
+
+        .food-item {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 10px;
+        }
+
+        .food-item h3 {
+            margin: 0 0 8px 0;
+            font-size: 15px;
+        }
+
+        .food-item p {
+            margin: 2px 0;
+            font-size: 13px;
+            color: #555;
+        }
+
+        .food-item form {
+            margin-top: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .food-item input[type="number"] {
+            width: 55px;
+            padding: 4px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        .food-item button {
+            padding: 5px 12px;
+            background-color: #2e7d32;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .food-item button:hover {
+            background-color: #1b5e20;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            font-size: 13px;
+        }
+
+        table th {
+            background-color: #e8f5e9;
+            text-align: left;
+            padding: 8px;
+            border: 1px solid #ddd;
+        }
+
+        table td {
+            padding: 7px 8px;
+            border: 1px solid #ddd;
+        }
+
+        table tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+
+        .edit-form {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+        }
+
+        .edit-form input {
+            width: 45px;
+            padding: 3px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+
+        .edit-form button {
+            padding: 3px 8px;
+            background-color: #1976d2;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .delete-btn {
+            padding: 3px 8px;
+            background-color: #c62828;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .totals-box {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+
+        .totals-box p {
+            margin: 6px 0;
+            font-size: 14px;
+        }
+
+        .totals-box span {
+            font-weight: bold;
+            color: #2e7d32;
+        }
+    </style>
+</head>
 <body>
     <h1>Calorie Tracker</h1>
-    
-    <form action="/handle_form" method="POST">
-        <input type="text" name="query">
-    </form>
+
+    <div class="search-bar">
+        <form action="/handle_form" method="POST" style="display: flex; gap: 8px;">
+            <input type="text" name="query" placeholder="Search for a food..." required>
+            <button type="submit">Search</button>
+        </form>
+    </div>
+
+    <div class="main-content">
+        <div class="results-section">
+            <h2>Search Results</h2>
+            {% if results %}
+                {% for food in results %}
+                <div class="food-item">
+                    <h3>{{ food["name"] }}</h3>
+                    <p>Calories: {{ food.get("calories", 0) }}</p>
+                    <p>Protein: {{ food.get("protein", 0) }}g</p>
+                    <p>Carbs: {{ food.get("carbs", 0) }}g</p>
+                    <p>Fat: {{ food.get("fat", 0) }}g</p>
+                    <form action="/update_log" method="POST">
+                        <input type="hidden" name="fdc_id" value="{{ food['fdc_id'] }}">
+                        <input type="number" name="quantity" value="1" min="1">
+                        <button type="submit">Add</button>
+                    </form>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p style="color: #888;">No results yet. Try searching for something above.</p>
+            {% endif %}
+        </div>
+
+        <div class="right-side">
+            <h2>Today's Log</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Food</th>
+                        <th>Servings</th>
+                        <th>Calories</th>
+                        <th>Protein</th>
+                        <th>Carbs</th>
+                        <th>Fat</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for f_id, qty in daily_log.items() %}
+                    {% set food = food_cache[f_id] %}
+                    <tr>
+                        <td>{{ food["name"] }}</td>
+                        <td>{{ qty }}</td>
+                        <td>{{ (qty * food.get("calories", 0)) | round(1) }}</td>
+                        <td>{{ (qty * food.get("protein", 0)) | round(1) }}g</td>
+                        <td>{{ (qty * food.get("carbs", 0)) | round(1) }}g</td>
+                        <td>{{ (qty * food.get("fat", 0)) | round(1) }}g</td>
+                        <td>
+                            <form action="/delete_log" method="POST">
+                                <input type="hidden" name="fdc_id" value="{{ f_id }}">
+                                <button class="delete-btn" type="submit">Remove</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <div class="totals-box">
+                <h2 style="margin-top: 0;">Daily Totals</h2>
+                <p>Calories: <span>{{ totals["calories"] | round(1) }}</span></p>
+                <p>Protein: <span>{{ totals["protein"] | round(1) }}g</span></p>
+                <p>Carbs: <span>{{ totals["carbs"] | round(1) }}g</span></p>
+                <p>Fat: <span>{{ totals["fat"] | round(1) }}g</span></p>
+            </div>
+        </div>
+    </div>
 </body>
-    
-
-
 </html>

@@ -22,30 +22,42 @@ def get_daily_totals():
     totals = {n: 0 for n in nutrient_types}
     for f_id, quantity in daily_log[userID].items():
         print("Food cache: ", food_cache)
-        info = food_cache[f_id]
+        info = food_cache.get(f_id)
+        if not info:
+            continue
 
         for type in nutrient_types:
-            if type in info:
-                totals[type] += quantity * info[type]
+            totals[type] += quantity * info.get(type, 0)
 
     return totals
 
 def update_food_cache(search_results):
     for result in search_results:
-        id = result["fdc_id"]
+        id = int(result["fdc_id"])
         food_cache[id] = result 
+
+def render_main(extra_results=None):
+    """Single helper so every route passes the same context."""
+    return render_template(
+        'index.html',
+        results=search_results,
+        daily_log=daily_log[userID],
+        food_cache=food_cache,
+        totals=get_daily_totals()
+    )
 
 @app.route("/")
 def index():
-    return render_template('index.html')
+    return render_main()
 
 @app.route('/handle_form', methods=['POST'])
 def handle_form():
+    global search_results
     user_input = request.form.get('query')
     search_results = search_food(user_input)
     update_food_cache(search_results)
 
-    return render_template('search.html', results=search_results, totals=get_daily_totals()) 
+    return render_main()
     
 @app.route('/update_log', methods=['POST'])
 def update_log():
@@ -54,10 +66,12 @@ def update_log():
 
     if food_id not in daily_log[userID]:
         daily_log[userID][food_id] = 0
-    daily_log[userID][food_id] += quantity
+    daily_log[userID][food_id] = daily_log[userID].get(food_id, 0) + quantity
 
-    return render_template('search.html', results=search_results, totals=get_daily_totals()) 
+    return render_main()
 
-@app.route('/search')
-def search():
-    return render_template('search.html', results=search_food(), totals=get_daily_totals()) 
+@app.route('/delete_log', methods=['POST'])
+def delete_log():
+    food_id = int(request.form.get('fdc_id'))
+    daily_log[userID].pop(food_id, None)
+    return render_main()
