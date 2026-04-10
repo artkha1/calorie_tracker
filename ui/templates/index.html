@@ -185,6 +185,7 @@
         <form action="/handle_form" method="POST" style="display: flex; gap: 8px;">
             <input type="text" name="query" placeholder="Search for a food..." required>
             <button type="submit">Search</button>
+            <input type="hidden" name="date" value="{{ selected_date }}">
         </form>
     </div>
 
@@ -201,6 +202,7 @@
                     <p>Fat: {{ food.get("fat", 0) }}g</p>
                     <form action="/update_log" method="POST">
                         <input type="hidden" name="fdc_id" value="{{ food['fdc_id'] }}">
+                        <input type="hidden" name="date" value="{{ selected_date }}">
                         <input type="number" name="quantity" value="1" min="1">
                         <button type="submit">Add</button>
                     </form>
@@ -212,7 +214,13 @@
         </div>
 
         <div class="right-side">
-            <h2>Today's Log</h2>
+            <h2>Daily Log</h2>
+
+            <form method="GET" action="/" style="margin-bottom: 10px;">
+                <input type="date" name="date" value="{{ selected_date }}">
+                <button type="submit">Load</button>
+            </form>
+
             <table>
                 <thead>
                     <tr>
@@ -238,6 +246,7 @@
                         <td>
                             <form action="/delete_log" method="POST">
                                 <input type="hidden" name="fdc_id" value="{{ f_id }}">
+                                <input type="hidden" name="date" value="{{ selected_date }}">
                                 <button class="delete-btn" type="submit">Remove</button>
                             </form>
                         </td>
