@@ -5,6 +5,12 @@ from datetime import datetime, timedelta
 
 app = Flask(__name__)
 
+macro_types = ["calories", "fat", "carbs", "protein"]
+macro_units = {"calories": "",
+         "fat": "g",
+         "carbs": "g",
+         "protein": "g"}
+
 class Record:
     """
         Record objects store 'update log' transactions.
@@ -16,10 +22,10 @@ class Record:
     """
 
     def __init__(self, timestamp, info, user_id, record_id):
+        self.id = record_id
         self.timestamp = timestamp
         self.info = info
         self.user_id = user_id
-        self.record_id = record_id
 
 class RecordManager:
     def __init__(self):
@@ -31,10 +37,11 @@ class RecordManager:
     def create_record(self, user_id, timestamp, info):
         # Use the total number of records created as id
         record_id = self._n_records         
-
+        
+        # Create a record oobject
         record = Record(timestamp, info, user_id, record_id)
 
-        # Log record
+        # Log the record
         self._records[record_id] = record
 
         # If this is the first record for the user, 
@@ -77,13 +84,10 @@ class RecordManager:
 
             if start_time:
                 time_delta = (r_time - start_time).total_seconds()
-                print("Time delta: ", time_delta)
                 include = time_delta >= 0
 
             if end_time:
                 time_delta = (end_time - r_time).total_seconds()
-                print("Time delta: ", time_delta)
-
                 include = include and (time_delta > 0)
             
             if not include:
@@ -121,24 +125,37 @@ user_log = {userID: []}
 search_results = [] # store search results to avoid repeated queries
 
 # Get totals for user since timestamp
-def get_totals(user_id, start_timestamp=None, end_timestamp=None):
-    nutrient_types = ["calories", "fat", "carbs", "protein"]
-    totals = {n: 0 for n in nutrient_types}
+def get_totals(records):
+
+    # Initalize dict to hold nutrition totals
+    totals = {n: 0 for n in macro_types}
     
-    print("Food cache: ", food_cache)
     log = {}
-    records = record_manager.query_user_records(user_id, start_timestamp, end_timestamp)
+
     for record in records.values():
         for(f_id, quantity) in record.info.items():
+            # Get nutrition data for food id f_id
             info = food_cache.get(f_id)
+
+            # Skip record if there is no data for food id
             if not info:
                 continue
-
-            for type in nutrient_types:
+            
+            # Update nutrition totals 
+            for type in macro_types:
+                if type not in info:
+                    continue
+                
+                if info.get(type, 0) is None:
+                    continue
+                
                 totals[type] += quantity * info.get(type, 0)
             
+            # 
             if f_id not in log:
                 log[f_id] = 0
+             
+            # Update food_id quantaity
             log[f_id] += quantity
 
     return log, totals
@@ -146,52 +163,71 @@ def get_totals(user_id, start_timestamp=None, end_timestamp=None):
 # Extract the selected date from request;
 # if a date is not selected, return the 
 # current day
-def get_selected_date(request):
-    selected_date = request.args.get("date") or request.form.get("date")
 
-    if selected_date is None:
-        # Set selected date to start of current day
+def get_selected_dates(request):
+    start_date = request.args.get("start_date") or request.form.get("start_date")
+    end_date = request.args.get("end_date") or request.form.get("end_date")
+
+    if start_date is None:
+        # Set start date to start of current day
         now = datetime.now()
         day_start = datetime(now.year, now.month, now.day) 
-        selected_date = day_start.date().isoformat()
+        start_date = day_start.date().isoformat()
 
-    return selected_date
+        # Set end date to next day
+        end_date = (day_start + timedelta(days=1)).date().isoformat()
+
+
+    return start_date, end_date 
 
 def update_food_cache(search_results):
     for result in search_results:
         id = int(result["fdc_id"])
         food_cache[id] = result 
 
-def render_main(selected_date, extra_results=None):
+def render_main(start_date, end_date, extra_results=None):
     """Single helper so every route passes the same context."""
+    
+    # Parse selected date (assume start of day)
+    start = datetime.strptime(start_date, "%Y-%m-%d")
+    
+    # Get nutritional information for the day
+    end = datetime.strptime(end_date, "%Y-%m-%d")
+    
+    # Get all records for user between start time stamp and end time stamp
+    records = record_manager.query_user_records(userID, start, end)
 
+    # Get totals for records
+    log, totals = get_totals(records)
+
+    curr_time = datetime.now()
+    curr_time = curr_time.strftime("%Y-%m-%d %H:%M:%S")
+    
+    """
     print("Selected date: ", selected_date) 
-            
-    # start = datetime(selected_date.year, selected_date.month, selected_date.day)
-
-    start = datetime.strptime(selected_date, "%Y-%m-%d")
-    end = start + timedelta(days=1)
-
-    daily_log, totals = get_totals(userID, start, end)
-
     print("Totals: ",  totals)
     print("Results: ", search_results)
     print("Daily log: ", daily_log)
+    """
 
     return render_template(
         'index.html',
         results=search_results,
-        daily_log=daily_log,
+        log=log,
         food_cache=food_cache,
         totals=totals,
-        selected_date=selected_date
+        records=records,
+        start_date=start_date,
+        end_date=end_date,
+        curr_time=curr_time,
+        macro_types=macro_types,
+        macro_units=macro_units
         )
 
 @app.route("/")
 def index():
-    selected_date = get_selected_date(request)
-    print("Selected date: ", selected_date)
-    return render_main(selected_date)
+    start_date, end_date = get_selected_dates(request)
+    return render_main(start_date, end_date)
 
 @app.route('/handle_form', methods=['POST'])
 def handle_form():
@@ -199,40 +235,33 @@ def handle_form():
     user_input = request.form.get('query')
     search_results = search_food(user_input)
     update_food_cache(search_results)
-    selected_date = get_selected_date(request)
+    start_date, end_date = get_selected_dates(request)
 
-    return render_main(selected_date)
+    return render_main(start_date, end_date)
     
+# TODO: Support multiple types of foods in record
 @app.route('/update_log', methods=['POST'])
 def update_log():
-    print("Updating log")
     food_id = int(request.form.get('fdc_id'))
     quantity = int(request.form.get('quantity'))
+
+    # Create timestamp from logged time
+    t = request.form.get('time')
+    time_stamp = datetime.strptime(t, "%Y-%m-%dT%H:%M:%S")
+    
     transaction_info = {food_id: quantity}
     
-    selected_date = get_selected_date(request)
-
     # Create record of update
-    time_stamp = datetime.strptime(selected_date, "%Y-%m-%d")
-
-    # time_stamp = datetime.now()
-
     record_manager.create_record(userID, time_stamp, transaction_info) 
-    print("Created record of update")
-    
-    if food_id not in daily_log[userID]:
-        daily_log[userID][food_id] = 0
-    daily_log[userID][food_id] = daily_log[userID].get(food_id, 0) + quantity
-    
-    print("Rendering")
 
-    return render_main(selected_date)
+    start_date, end_date = get_selected_dates(request)
+    return render_main(start_date, end_date)
 
-# TODO: Fix deletion
 @app.route('/delete_log', methods=['POST'])
 def delete_log():
-    food_id = int(request.form.get('fdc_id'))
-    daily_log[userID].pop(food_id, None)
-    selected_date = get_selected_date(request)
+    # Remove record
+    record_id = int(request.form.get('record_id'))
+    record_manager.remove_record(record_id)
 
-    return render_main(selected_date)
+    start_date, end_date = get_selected_dates(request)
+    return render_main(start_date, end_date)

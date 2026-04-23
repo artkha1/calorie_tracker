@@ -165,6 +165,8 @@
             border-radius: 6px;
             padding: 15px;
             margin-top: 20px;
+            margin-bottom: 20px;
+
         }
 
         .totals-box p {
@@ -185,7 +187,9 @@
         <form action="/handle_form" method="POST" style="display: flex; gap: 8px;">
             <input type="text" name="query" placeholder="Search for a food..." required>
             <button type="submit">Search</button>
-            <input type="hidden" name="date" value="{{ selected_date }}">
+            <input type="hidden" name="start_date" value="{{ start_date }}">
+            <input type="hidden" name="end_date" value="{{ end_date }}">
+
         </form>
     </div>
 
@@ -202,8 +206,11 @@
                     <p>Fat: {{ food.get("fat", 0) }}g</p>
                     <form action="/update_log" method="POST">
                         <input type="hidden" name="fdc_id" value="{{ food['fdc_id'] }}">
-                        <input type="hidden" name="date" value="{{ selected_date }}">
                         <input type="number" name="quantity" value="1" min="1">
+                        <input type="hidden" name="start_date" value="{{ start_date }}">
+                        <input type="hidden" name="end_date" value="{{ end_date }}">
+
+                        <input type="datetime-local" name="time" value = "{{ curr_time }}">
                         <button type="submit">Add</button>
                     </form>
                 </div>
@@ -214,54 +221,122 @@
         </div>
 
         <div class="right-side">
-            <h2>Daily Log</h2>
+            <h2>Nutrition Log</h2>
 
             <form method="GET" action="/" style="margin-bottom: 10px;">
-                <input type="date" name="date" value="{{ selected_date }}">
+                <input type="date" name="start_date" value="{{ start_date }}">
+                <input type="date" name="end_date" value="{{ end_date }}">
+
                 <button type="submit">Load</button>
             </form>
-
+            
+            <h3>Overview</h3>
             <table>
                 <thead>
                     <tr>
                         <th>Food</th>
                         <th>Servings</th>
-                        <th>Calories</th>
-                        <th>Protein</th>
-                        <th>Carbs</th>
-                        <th>Fat</th>
-                        <th></th>
+                        {% for type in macro_types %}
+                        <th>{{ type.capitalize() }}</th>
+                        {% endfor %}
                     </tr>
                 </thead>
                 <tbody>
-                    {% for f_id, qty in daily_log.items() %}
+                    {% for f_id, qty in log.items() %}
                     {% set food = food_cache[f_id] %}
                     <tr>
                         <td>{{ food["name"] }}</td>
                         <td>{{ qty }}</td>
-                        <td>{{ (qty * food.get("calories", 0)) | round(1) }}</td>
-                        <td>{{ (qty * food.get("protein", 0)) | round(1) }}g</td>
-                        <td>{{ (qty * food.get("carbs", 0)) | round(1) }}g</td>
-                        <td>{{ (qty * food.get("fat", 0)) | round(1) }}g</td>
-                        <td>
-                            <form action="/delete_log" method="POST">
-                                <input type="hidden" name="fdc_id" value="{{ f_id }}">
-                                <input type="hidden" name="date" value="{{ selected_date }}">
-                                <button class="delete-btn" type="submit">Remove</button>
-                            </form>
-                        </td>
+                        {% for type in macro_types %}
+                        {% if food.get(type, 0) is not none%}
+                        <td>{{ (qty * food.get(type, 0)) | round(1) }}{{ macro_units[type] }}</td>
+                        {% else %}
+                        <td>None</td>
+                        {% endif %}
+                        {% endfor %}
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
 
             <div class="totals-box">
-                <h2 style="margin-top: 0;">Daily Totals</h2>
+                <h3 style="margin-top: 0;">Macro Totals</h3>
                 <p>Calories: <span>{{ totals["calories"] | round(1) }}</span></p>
                 <p>Protein: <span>{{ totals["protein"] | round(1) }}g</span></p>
                 <p>Carbs: <span>{{ totals["carbs"] | round(1) }}g</span></p>
                 <p>Fat: <span>{{ totals["fat"] | round(1) }}g</span></p>
             </div>
+            
+            <div class="records-box">
+                <h3 style="margin-top: 0;">Records</h3>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Record</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for r_id, record in records.items() %}
+                        <tr>
+                            <td>{{ record.timestamp.strftime("%I:%M %p") }}</td>
+
+                            <td>
+                                <details>
+                                    <summary>
+                                        {{ record.info|length }} foods
+                                    </summary>
+
+                                    <!-- Nested food table -->
+                                    <table class="inner-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Food</th>
+                                                <th>Qty</th>
+                                                {% for type in macro_types %}
+                                                <th>{{ type.capitalize() }}</th>
+                                                {% endfor %}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for f_id, qty in record.info.items() %}
+                                            {% set food = food_cache[f_id] %}
+                                            <tr>
+                                                <td>{{ food["name"] }}</td>
+                                                <td>{{ qty }}</td>
+                                                {% for type in macro_types %}
+                                                {% if food.get(type, 0) is not none%}
+                                                <td>{{ (qty * food.get(type, 0)) | round(1) }}{{ macro_units[type] }}</td>
+                                                {% else %}
+                                                <td>None</td>
+                                                {% endif %}
+                                                {% endfor %}
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+
+                                </details>
+                            </td>
+
+                            <td>
+                                <!-- Delete whole record -->
+                                <form action="/delete_log" method="POST">
+                                    <input type="hidden" name="record_id" value="{{ r_id }}">
+                                    <button type="submit">Delete</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+
+            </div>
+
+            
+
         </div>
     </div>
 </body>
