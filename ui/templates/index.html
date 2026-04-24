@@ -178,11 +178,102 @@
             font-weight: bold;
             color: #2e7d32;
         }
+
+        /* Calorie goal card */
+        .goal-card {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .goal-card h3 {
+            margin: 0 0 12px 0;
+            color: #333; }
+
+        .goal-stats {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 12px;
+        }
+        .goal-stat {
+            text-align: center;
+        }
+        .goal-stat .value {
+            font-size: 22px;
+            font-weight: bold;
+            color: #2e7d32;
+        }
+
+        .goal-stat .value.over {
+            color: #c62828;
+        }
+
+        .goal-stat .label {
+            font-size: 12px;
+            color: #888;
+            margin-top: 2px;
+        }
+
+        .progress-bar-bg {
+            background: #e0e0e0;
+            border-radius: 8px;
+            height: 14px;
+            width: 100%;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            border-radius: 8px;
+            background: #2e7d32;
+            transition: width 0.3s ease;
+        }
+
+        .progress-bar-fill.over {
+            background: #c62828;
+        }
+
+        .goal-form {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-top: 10px;
+        }
+
+        .goal-form input[type="number"] {
+            width: 90px;
+            padding: 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+
+        .goal-form button {
+            padding: 5px 12px;
+            background-color: #1976d2;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .goal-form button:hover {
+            background-color: #1565c0;
+        }
+
+        .goal-form label {
+            font-size: 13px;
+            color: #555;
+        }
     </style>
 </head>
 <body>
     <h1>Calorie Tracker</h1>
 
+    <!-- Search bar -->
     <div class="search-bar">
         <form action="/handle_form" method="POST" style="display: flex; gap: 8px;">
             <input type="text" name="query" placeholder="Search for a food..." required>
@@ -194,6 +285,7 @@
     </div>
 
     <div class="main-content">
+        <!-- Search results -->
         <div class="results-section">
             <h2>Search Results</h2>
             {% if results %}
@@ -210,7 +302,7 @@
                         <input type="hidden" name="start_date" value="{{ start_date }}">
                         <input type="hidden" name="end_date" value="{{ end_date }}">
 
-                        <input type="datetime-local" name="time" value = "{{ curr_time }}">
+                        <input type="datetime-local" name="time" value="{{ curr_time }}">
                         <button type="submit">Add</button>
                     </form>
                 </div>
@@ -220,7 +312,55 @@
             {% endif %}
         </div>
 
+        <!-- Right side: goal + log -->
         <div class="right-side">
+
+            <!-- Calorie Goal Card -->
+            <div class="goal-card">
+                <h3>Daily Calorie Goal</h3>
+
+                <div class="goal-stats">
+                    <div class="goal-stat">
+                        <div class="value {% if calories_consumed > calorie_goal %}over{% endif %}">
+                            {{ calories_consumed }}
+                        </div>
+                        <div class="label">Consumed</div>
+                    </div>
+                    <div class="goal-stat">
+                        <div class="value">{{ calorie_goal }}</div>
+                        <div class="label">Goal</div>
+                    </div>
+                    <div class="goal-stat">
+                        <div class="value {% if calories_consumed > calorie_goal %}over{% endif %}">
+                            {% if calories_consumed > calorie_goal %}
+                                +{{ (calories_consumed - calorie_goal) | round(1) }} over
+                            {% else %}
+                                {{ calories_remaining }} left
+                            {% endif %}
+                        </div>
+                        <div class="label">Remaining</div>
+                    </div>
+                </div>
+
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill {% if calorie_progress >= 100 %}over{% endif %}"
+                         style="width: {{ calorie_progress }}%"></div>
+                </div>
+                <div style="font-size: 12px; color: #888; margin-bottom: 8px;">
+                    {{ calorie_progress }}% of daily goal
+                </div>
+
+                <!-- Set goal form -->
+                <form action="/set_goal" method="POST" class="goal-form">
+                    <label for="calorie_goal">Set goal:</label>
+                    <input type="number" name="calorie_goal" id="calorie_goal"
+                           value="{{ calorie_goal }}" min="1" step="1">
+                    <input type="hidden" name="start_date" value="{{ start_date }}">
+                    <input type="hidden" name="end_date" value="{{ end_date }}">
+                    <button type="submit">Update</button>
+                </form>
+            </div>
+
             <h2>Nutrition Log</h2>
 
             <form method="GET" action="/" style="margin-bottom: 10px;">
@@ -248,11 +388,14 @@
                         <td>{{ food["name"] }}</td>
                         <td>{{ qty }}</td>
                         {% for type in macro_types %}
-                        {% if food.get(type, 0) is not none%}
-                        <td>{{ (qty * food.get(type, 0)) | round(1) }}{{ macro_units[type] }}</td>
-                        {% else %}
-                        <td>None</td>
-                        {% endif %}
+                        {% set val = food.get(type, 0) %}
+                        <td>
+                            {% if val is not none %}
+                                {{ (qty * val) | round(1) }}{{ macro_units[type] }}
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
                         {% endfor %}
                     </tr>
                     {% endfor %}
@@ -285,11 +428,7 @@
 
                             <td>
                                 <details>
-                                    <summary>
-                                        {{ record.info|length }} foods
-                                    </summary>
-
-                                    <!-- Nested food table -->
+                                    <summary>{{ record.info|length }} food(s)</summary>
                                     <table class="inner-table">
                                         <thead>
                                             <tr>
@@ -307,35 +446,34 @@
                                                 <td>{{ food["name"] }}</td>
                                                 <td>{{ qty }}</td>
                                                 {% for type in macro_types %}
-                                                {% if food.get(type, 0) is not none%}
-                                                <td>{{ (qty * food.get(type, 0)) | round(1) }}{{ macro_units[type] }}</td>
-                                                {% else %}
-                                                <td>None</td>
-                                                {% endif %}
+                                                {% set val = food.get(type, 0) %}
+                                                <td>
+                                                    {% if val is not none %}
+                                                        {{ (qty * val) | round(1) }}{{ macro_units[type] }}
+                                                    {% else %}
+                                                        —
+                                                    {% endif %}
+                                                </td>
                                                 {% endfor %}
                                             </tr>
                                             {% endfor %}
                                         </tbody>
                                     </table>
-
                                 </details>
                             </td>
-
                             <td>
-                                <!-- Delete whole record -->
                                 <form action="/delete_log" method="POST">
                                     <input type="hidden" name="record_id" value="{{ r_id }}">
-                                    <button type="submit">Delete</button>
+                                    <input type="hidden" name="start_date" value="{{ start_date }}">
+                                    <input type="hidden" name="end_date" value="{{ end_date }}">
+                                    <button class="delete-btn" type="submit">Delete</button>
                                 </form>
                             </td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
-
             </div>
-
-            
 
         </div>
     </div>
