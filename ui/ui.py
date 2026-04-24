@@ -11,6 +11,8 @@ macro_units = {"calories": "",
          "carbs": "g",
          "protein": "g"}
 
+DEFAULT_CALORIE_GOAL = 2000
+
 class Record:
     """
         Record objects store 'update log' transactions.
@@ -83,23 +85,19 @@ class RecordManager:
             include = True
 
             if start_time:
-                time_delta = (r_time - start_time).total_seconds()
-                include = time_delta >= 0
-
+                include = (r_time - start_time).total_seconds() >= 0
             if end_time:
-                time_delta = (end_time - r_time).total_seconds()
-                include = include and (time_delta > 0)
-            
-            if not include:
-                continue
+                include = include and (end_time - r_time).total_seconds() > 0
 
-            results[record_id] = record
+            if include:
+                results[record_id] = record
+
         return results
 
     def remove_record(self, record_id):
         if record_id not in self._records:
             return
-        
+
         record = self._records[record_id]
         
         user_id = record.user_id
@@ -109,7 +107,7 @@ class RecordManager:
 
 record_manager = RecordManager()
 
-# TODO: Replace with session cookie (or perstient storage w/ login system)
+# TODO: Replace with session cookie (or persistent storage w/ login system)
 userID = "John"
 
 # TODO: Properly implement a food cache
@@ -124,39 +122,33 @@ user_log = {userID: []}
 # Proper asynchronous updates should be implemented using Ajax
 search_results = [] # store search results to avoid repeated queries
 
+# Per-user calorie goals (will move to DB with auth)
+calorie_goals = {userID: DEFAULT_CALORIE_GOAL}
+
 # Get totals for user since timestamp
 def get_totals(records):
 
     # Initalize dict to hold nutrition totals
     totals = {n: 0 for n in macro_types}
-    
+
     log = {}
 
     for record in records.values():
-        for(f_id, quantity) in record.info.items():
+        for (f_id, quantity) in record.info.items():
             # Get nutrition data for food id f_id
             info = food_cache.get(f_id)
 
             # Skip record if there is no data for food id
             if not info:
                 continue
-            
+
             # Update nutrition totals 
-            for type in macro_types:
-                if type not in info:
-                    continue
-                
-                if info.get(type, 0) is None:
-                    continue
-                
-                totals[type] += quantity * info.get(type, 0)
-            
-            # 
-            if f_id not in log:
-                log[f_id] = 0
-             
-            # Update food_id quantaity
-            log[f_id] += quantity
+            for t in macro_types:
+                val = info.get(t, 0)
+                if val is not None:
+                    totals[t] += quantity * val
+
+            log[f_id] = log.get(f_id, 0) + quantity
 
     return log, totals
 
@@ -182,10 +174,10 @@ def get_selected_dates(request):
 
 def update_food_cache(search_results):
     for result in search_results:
-        id = int(result["fdc_id"])
-        food_cache[id] = result 
+        food_cache[int(result["fdc_id"])] = result
 
-def render_main(start_date, end_date, extra_results=None):
+
+def render_main(start_date, end_date):
     """Single helper so every route passes the same context."""
     
     # Parse selected date (assume start of day)
@@ -193,22 +185,20 @@ def render_main(start_date, end_date, extra_results=None):
     
     # Get nutritional information for the day
     end = datetime.strptime(end_date, "%Y-%m-%d")
-    
+
     # Get all records for user between start time stamp and end time stamp
     records = record_manager.query_user_records(userID, start, end)
 
     # Get totals for records
     log, totals = get_totals(records)
 
-    curr_time = datetime.now()
-    curr_time = curr_time.strftime("%Y-%m-%d %H:%M:%S")
-    
-    """
-    print("Selected date: ", selected_date) 
-    print("Totals: ",  totals)
-    print("Results: ", search_results)
-    print("Daily log: ", daily_log)
-    """
+    # FIX (Artem): datetime-local inputs require format without seconds
+    curr_time = datetime.now().strftime("%Y-%m-%dT%H:%M")
+
+    calorie_goal = calorie_goals.get(userID, DEFAULT_CALORIE_GOAL)
+    calories_consumed = round(totals.get("calories", 0), 1)
+    calories_remaining = round(max(calorie_goal - calories_consumed, 0), 1)
+    calorie_progress = min(round((calories_consumed / calorie_goal) * 100, 1), 100) if calorie_goal > 0 else 0
 
     return render_template(
         'index.html',
@@ -221,8 +211,13 @@ def render_main(start_date, end_date, extra_results=None):
         end_date=end_date,
         curr_time=curr_time,
         macro_types=macro_types,
-        macro_units=macro_units
-        )
+        macro_units=macro_units,
+        calorie_goal=calorie_goal,
+        calories_consumed=calories_consumed,
+        calories_remaining=calories_remaining,
+        calorie_progress=calorie_progress,
+    )
+
 
 @app.route("/")
 def index():
@@ -247,12 +242,14 @@ def update_log():
 
     # Create timestamp from logged time
     t = request.form.get('time')
-    time_stamp = datetime.strptime(t, "%Y-%m-%dT%H:%M:%S")
-    
-    transaction_info = {food_id: quantity}
-    
+    try:
+        # FIX: parse format matching the corrected datetime-local output (no seconds)
+        time_stamp = datetime.strptime(t, "%Y-%m-%dT%H:%M")
+    except (ValueError, TypeError):
+        time_stamp = datetime.now()
+
     # Create record of update
-    record_manager.create_record(userID, time_stamp, transaction_info) 
+    record_manager.create_record(userID, time_stamp, {food_id: quantity})
 
     start_date, end_date = get_selected_dates(request)
     return render_main(start_date, end_date)
@@ -262,6 +259,19 @@ def delete_log():
     # Remove record
     record_id = int(request.form.get('record_id'))
     record_manager.remove_record(record_id)
+
+    start_date, end_date = get_selected_dates(request)
+    return render_main(start_date, end_date)
+
+@app.route('/set_goal', methods=['POST'])
+def set_goal():
+    """Update the user's daily calorie goal."""
+    try:
+        goal = int(request.form.get('calorie_goal', DEFAULT_CALORIE_GOAL))
+        if goal > 0:
+            calorie_goals[userID] = goal
+    except (ValueError, TypeError):
+        pass
 
     start_date, end_date = get_selected_dates(request)
     return render_main(start_date, end_date)
