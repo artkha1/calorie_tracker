@@ -11,8 +11,17 @@ def _get_connection() -> sqlite3.Connection:
 
 
 def init_db() -> None:
-    """Create the foods table if it does not already exist."""
+    """Create required tables if they do not already exist."""
     with _get_connection() as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL
+            )
+            """
+        )
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS foods (

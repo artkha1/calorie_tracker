@@ -1,0 +1,18 @@
+<!doctype html>
+<html>
+<head>
+    <title>Login</title>
+</head>
+<body>
+    <h1>Login</h1>
+    {% for message in get_flashed_messages() %}
+        <p style="color: red;">{{ message }}</p>
+    {% endfor %}
+    <form method="post">
+        <input name="username" placeholder="username" required>
+        <input name="password" type="password" placeholder="password" required>
+        <button type="submit">Login</button>
+    </form>
+    <p><a href="{{ url_for('auth.register') }}">Need an account? Register</a></p>
+</body>
+</html>

@@ -1,9 +1,17 @@
-from flask import Flask, request, render_template
+import os
+from flask import Flask, request, render_template, g
 from api.nutrition_api import search_food
 from collections import OrderedDict
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
+from storage.database import init_db
+from ui.auth import bp as auth_bp, login_required
 
+load_dotenv()
 app = Flask(__name__)
+app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-only-not-for-prod")
+app.register_blueprint(auth_bp)
+init_db()
 
 macro_types = ["calories", "fat", "carbs", "protein"]
 macro_units = {"calories": "",
@@ -109,16 +117,8 @@ class RecordManager:
 
 record_manager = RecordManager()
 
-# TODO: Replace with session cookie (or perstient storage w/ login system)
-userID = "John"
-
 # TODO: Properly implement a food cache
 food_cache = {} # Only need to store foods in log
-
-# TODO: Revamp logging
-# Each user is mapped to a dict with food ids as keys and quantites as values
-daily_log = {userID: {}}
-user_log = {userID: []}
 
 # TODO: Storing previous search results in a global variable has many issues
 # Proper asynchronous updates should be implemented using Ajax
@@ -195,7 +195,7 @@ def render_main(start_date, end_date, extra_results=None):
     end = datetime.strptime(end_date, "%Y-%m-%d")
     
     # Get all records for user between start time stamp and end time stamp
-    records = record_manager.query_user_records(userID, start, end)
+    records = record_manager.query_user_records(g.user["username"], start, end)
 
     # Get totals for records
     log, totals = get_totals(records)
@@ -225,11 +225,13 @@ def render_main(start_date, end_date, extra_results=None):
         )
 
 @app.route("/")
+@login_required
 def index():
     start_date, end_date = get_selected_dates(request)
     return render_main(start_date, end_date)
 
 @app.route('/handle_form', methods=['POST'])
+@login_required
 def handle_form():
     global search_results
     user_input = request.form.get('query')
@@ -241,6 +243,7 @@ def handle_form():
     
 # TODO: Support multiple types of foods in record
 @app.route('/update_log', methods=['POST'])
+@login_required
 def update_log():
     food_id = int(request.form.get('fdc_id'))
     quantity = int(request.form.get('quantity'))
@@ -252,12 +255,13 @@ def update_log():
     transaction_info = {food_id: quantity}
     
     # Create record of update
-    record_manager.create_record(userID, time_stamp, transaction_info) 
+    record_manager.create_record(g.user["username"], time_stamp, transaction_info)
 
     start_date, end_date = get_selected_dates(request)
     return render_main(start_date, end_date)
 
 @app.route('/delete_log', methods=['POST'])
+@login_required
 def delete_log():
     # Remove record
     record_id = int(request.form.get('record_id'))
