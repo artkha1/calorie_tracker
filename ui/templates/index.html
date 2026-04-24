@@ -272,6 +272,10 @@
 </head>
 <body>
     <h1>Calorie Tracker</h1>
+    <p>
+        Logged in as <strong>{{ g.user["username"] }}</strong>
+        | <a href="{{ url_for('auth.logout') }}">Logout</a>
+    </p>
 
     <!-- Search bar -->
     <div class="search-bar">
