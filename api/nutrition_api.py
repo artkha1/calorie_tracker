@@ -1,6 +1,7 @@
 from usda_fdc import FdcClient, FdcApiError, FdcAuthError
 import os
 from dotenv import load_dotenv
+from ml.ml_utils import deduplicate_foods
 
 # Load API key from .env file
 load_dotenv()
@@ -44,8 +45,8 @@ def search_food(query: str):
 
         foods = []
 
-        # limit results for UI simplicity
-        for food_item in results.foods[:5]:
+        # Fetch more candidates than needed so deduplication has room to work
+        for food_item in results.foods[:20]:
             try:
                 # get full food details (nutrients not always complete in search results)
                 food = client.get_food(food_item.fdc_id)
@@ -61,7 +62,10 @@ def search_food(query: str):
             except Exception:
                 continue  # skip bad entries safely
 
-        return foods
+        # Remove near-duplicate descriptions, keep most nutrient-complete entry
+        foods = deduplicate_foods(foods)
+ 
+        return foods[:5]
 
     except FdcAuthError as e:
         print(f"Auth error: {e}")

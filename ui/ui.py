@@ -19,7 +19,7 @@ macro_units = {"calories": "",
          "carbs": "g",
          "protein": "g"}
 
-DEFAULT_CALORIE_GOAL = 2000
+DEFAULT_GOALS = {"calories": 2000, "protein": 50, "carbs": 275, "fat": 78}
 
 class Record:
     """
@@ -111,7 +111,7 @@ class RecordManager:
         user_id = record.user_id
         del self._users_to_records[user_id][record_id]
 
-        del record
+        del self._records[record_id]
 
 record_manager = RecordManager()
 
@@ -125,8 +125,8 @@ food_cache = {} # Only need to store foods in log
 # Proper asynchronous updates should be implemented using Ajax
 search_results = [] # store search results to avoid repeated queries
 
-# Per-user calorie goals (will move to DB with auth)
-calorie_goals = {userID: DEFAULT_CALORIE_GOAL}
+# Per-user macro goals (will move to DB with auth)
+macro_goals = {userID: dict(DEFAULT_GOALS)}
 
 # Get totals for user since timestamp
 def get_totals(records):
@@ -179,6 +179,24 @@ def update_food_cache(search_results):
     for result in search_results:
         food_cache[int(result["fdc_id"])] = result
 
+def compute_goal_stats(totals, goals):
+    """For each macro, compute consumed, goal, remaining, and progress %."""
+    stats = {}
+    for macro in macro_types:
+        consumed = round(totals.get(macro, 0), 1)
+        goal = goals.get(macro, DEFAULT_GOALS[macro])
+        remaining = round(max(goal - consumed, 0), 1)
+        over = round(consumed - goal, 1) if consumed > goal else 0
+        progress = min(round((consumed / goal) * 100, 1), 100) if goal > 0 else 0
+        stats[macro] = {
+            "consumed": consumed,
+            "goal": goal,
+            "remaining": remaining,
+            "over": over,
+            "progress": progress,
+        }
+    return stats
+
 
 def render_main(start_date, end_date):
     """Single helper so every route passes the same context."""
@@ -198,10 +216,8 @@ def render_main(start_date, end_date):
     # FIX (Artem): datetime-local inputs require format without seconds
     curr_time = datetime.now().strftime("%Y-%m-%dT%H:%M")
 
-    calorie_goal = calorie_goals.get(userID, DEFAULT_CALORIE_GOAL)
-    calories_consumed = round(totals.get("calories", 0), 1)
-    calories_remaining = round(max(calorie_goal - calories_consumed, 0), 1)
-    calorie_progress = min(round((calories_consumed / calorie_goal) * 100, 1), 100) if calorie_goal > 0 else 0
+    goals = macro_goals.get(userID, dict(DEFAULT_GOALS))
+    goal_stats = compute_goal_stats(totals, goals)
 
     return render_template(
         'index.html',
@@ -215,10 +231,7 @@ def render_main(start_date, end_date):
         curr_time=curr_time,
         macro_types=macro_types,
         macro_units=macro_units,
-        calorie_goal=calorie_goal,
-        calories_consumed=calories_consumed,
-        calories_remaining=calories_remaining,
-        calorie_progress=calorie_progress,
+        goal_stats=goal_stats,
     )
 
 
@@ -255,7 +268,7 @@ def update_log():
         time_stamp = datetime.now()
 
     # Create record of update
-    record_manager.create_record(g.user["username"], time_stamp, transaction_info)
+    record_manager.create_record(g.user["username"], time_stamp, {food_id: quantity})
 
     start_date, end_date = get_selected_dates(request)
     return render_main(start_date, end_date)
@@ -270,15 +283,18 @@ def delete_log():
     start_date, end_date = get_selected_dates(request)
     return render_main(start_date, end_date)
 
-@app.route('/set_goal', methods=['POST'])
-def set_goal():
-    """Update the user's daily calorie goal."""
-    try:
-        goal = int(request.form.get('calorie_goal', DEFAULT_CALORIE_GOAL))
-        if goal > 0:
-            calorie_goals[userID] = goal
-    except (ValueError, TypeError):
-        pass
-
+@app.route('/set_goals', methods=['POST'])
+def set_goals():
+    """Update the user's daily macro goals."""
+    goals = macro_goals.get(userID, dict(DEFAULT_GOALS))
+    for macro in macro_types:
+        try:
+            val = int(request.form.get(f'goal_{macro}', goals[macro]))
+            if val > 0:
+                goals[macro] = val
+        except (ValueError, TypeError):
+            pass
+    macro_goals[userID] = goals
+ 
     start_date, end_date = get_selected_dates(request)
     return render_main(start_date, end_date)

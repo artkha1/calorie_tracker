@@ -179,95 +179,32 @@
             color: #2e7d32;
         }
 
-        /* Calorie goal card */
-        .goal-card {
-            background: white;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            padding: 15px;
-            margin-bottom: 20px;
-        }
-        .goal-card h3 {
-            margin: 0 0 12px 0;
-            color: #333; }
+        /* Macro goal cards */
+        .goals-section { margin-bottom: 20px; }
+        .goals-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+ 
+        .goal-card { background: white; border: 1px solid #ddd; border-radius: 6px; padding: 12px; }
+        .goal-card .macro-label { font-size: 12px; font-weight: bold; color: #555; text-transform: uppercase; margin-bottom: 6px; }
+        .goal-card .goal-stats { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px; }
+        .goal-card .consumed { font-weight: bold; color: #2e7d32; }
+        .goal-card .consumed.over { color: #c62828; }
+        .goal-card .goal-val { color: #888; }
+ 
+        .progress-bar-bg { background: #e0e0e0; border-radius: 8px; height: 10px; width: 100%; overflow: hidden; }
+        .progress-bar-fill { height: 100%; border-radius: 8px; background: #2e7d32; transition: width 0.3s ease; }
+        .progress-bar-fill.over { background: #c62828; }
+ 
+        .goal-remaining { font-size: 11px; color: #888; margin-top: 4px; }
+        .goal-remaining.over { color: #c62828; }
 
-        .goal-stats {
-            display: flex;
-            gap: 20px;
-            margin-bottom: 12px;
-        }
-        .goal-stat {
-            text-align: center;
-        }
-        .goal-stat .value {
-            font-size: 22px;
-            font-weight: bold;
-            color: #2e7d32;
-        }
-
-        .goal-stat .value.over {
-            color: #c62828;
-        }
-
-        .goal-stat .label {
-            font-size: 12px;
-            color: #888;
-            margin-top: 2px;
-        }
-
-        .progress-bar-bg {
-            background: #e0e0e0;
-            border-radius: 8px;
-            height: 14px;
-            width: 100%;
-            overflow: hidden;
-            margin-bottom: 10px;
-        }
-
-        .progress-bar-fill {
-            height: 100%;
-            border-radius: 8px;
-            background: #2e7d32;
-            transition: width 0.3s ease;
-        }
-
-        .progress-bar-fill.over {
-            background: #c62828;
-        }
-
-        .goal-form {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-            margin-top: 10px;
-        }
-
-        .goal-form input[type="number"] {
-            width: 90px;
-            padding: 5px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            font-size: 13px;
-        }
-
-        .goal-form button {
-            padding: 5px 12px;
-            background-color: #1976d2;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 13px;
-        }
-
-        .goal-form button:hover {
-            background-color: #1565c0;
-        }
-
-        .goal-form label {
-            font-size: 13px;
-            color: #555;
-        }
+        /* Set goals form */
+        .set-goals-card { background: white; border: 1px solid #ddd; border-radius: 6px; padding: 12px; }
+        .set-goals-card h3 { margin: 0 0 10px 0; font-size: 14px; color: #333; }
+        .goals-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+        .goals-form-grid label { font-size: 12px; color: #555; display: block; margin-bottom: 2px; }
+        .goals-form-grid input { width: 100%; padding: 4px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; box-sizing: border-box; }
+        .set-goals-card button { padding: 5px 14px; background-color: #1976d2; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
+        .set-goals-card button:hover { background-color: #1565c0; }
     </style>
 </head>
 <body>
@@ -319,50 +256,51 @@
         <!-- Right side: goal + log -->
         <div class="right-side">
 
-            <!-- Calorie Goal Card -->
-            <div class="goal-card">
-                <h3>Daily Calorie Goal</h3>
-
-                <div class="goal-stats">
-                    <div class="goal-stat">
-                        <div class="value {% if calories_consumed > calorie_goal %}over{% endif %}">
-                            {{ calories_consumed }}
+            <!-- Macro goal cards -->
+            <div class="goals-section">
+                <h2>Daily Goals</h2>
+                <div class="goals-grid">
+                    {% for macro in macro_types %}
+                    {% set s = goal_stats[macro] %}
+                    <div class="goal-card">
+                        <div class="macro-label">{{ macro }}{% if macro_units[macro] %} ({{ macro_units[macro] }}){% endif %}</div>
+                        <div class="goal-stats">
+                            <span class="consumed {% if s.over > 0 %}over{% endif %}">{{ s.consumed }}{{ macro_units[macro] }}</span>
+                            <span class="goal-val">/ {{ s.goal }}{{ macro_units[macro] }}</span>
                         </div>
-                        <div class="label">Consumed</div>
-                    </div>
-                    <div class="goal-stat">
-                        <div class="value">{{ calorie_goal }}</div>
-                        <div class="label">Goal</div>
-                    </div>
-                    <div class="goal-stat">
-                        <div class="value {% if calories_consumed > calorie_goal %}over{% endif %}">
-                            {% if calories_consumed > calorie_goal %}
-                                +{{ (calories_consumed - calorie_goal) | round(1) }} over
+                        <div class="progress-bar-bg">
+                            <div class="progress-bar-fill {% if s.progress >= 100 %}over{% endif %}"
+                                 style="width: {{ s.progress }}%"></div>
+                        </div>
+                        <div class="goal-remaining {% if s.over > 0 %}over{% endif %}">
+                            {% if s.over > 0 %}
+                                +{{ s.over }}{{ macro_units[macro] }} over goal
                             {% else %}
-                                {{ calories_remaining }} left
+                                {{ s.remaining }}{{ macro_units[macro] }} remaining
                             {% endif %}
                         </div>
-                        <div class="label">Remaining</div>
                     </div>
+                    {% endfor %}
                 </div>
 
-                <div class="progress-bar-bg">
-                    <div class="progress-bar-fill {% if calorie_progress >= 100 %}over{% endif %}"
-                         style="width: {{ calorie_progress }}%"></div>
+                <!-- Set goals form -->
+                <div class="set-goals-card">
+                    <h3>Set Goals</h3>
+                    <form action="/set_goals" method="POST">
+                        <div class="goals-form-grid">
+                            {% for macro in macro_types %}
+                            <div>
+                                <label for="goal_{{ macro }}">{{ macro.capitalize() }}{% if macro_units[macro] %} ({{ macro_units[macro] }}){% endif %}</label>
+                                <input type="number" name="goal_{{ macro }}" id="goal_{{ macro }}"
+                                       value="{{ goal_stats[macro].goal }}" min="1" step="1">
+                            </div>
+                            {% endfor %}
+                        </div>
+                        <input type="hidden" name="start_date" value="{{ start_date }}">
+                        <input type="hidden" name="end_date" value="{{ end_date }}">
+                        <button type="submit">Update Goals</button>
+                    </form>
                 </div>
-                <div style="font-size: 12px; color: #888; margin-bottom: 8px;">
-                    {{ calorie_progress }}% of daily goal
-                </div>
-
-                <!-- Set goal form -->
-                <form action="/set_goal" method="POST" class="goal-form">
-                    <label for="calorie_goal">Set goal:</label>
-                    <input type="number" name="calorie_goal" id="calorie_goal"
-                           value="{{ calorie_goal }}" min="1" step="1">
-                    <input type="hidden" name="start_date" value="{{ start_date }}">
-                    <input type="hidden" name="end_date" value="{{ end_date }}">
-                    <button type="submit">Update</button>
-                </form>
             </div>
 
             <h2>Nutrition Log</h2>
