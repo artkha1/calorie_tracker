@@ -41,10 +41,9 @@ def init_db() -> None:
             """
             CREATE TABLE IF NOT EXISTS log_entries (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT NOT NULL,
+                record_id INTEGER NOT NULL,
                 fdc_id INTEGER NOT NULL,
-                quantity REAL NOT NULL,
-                timestamp TEXT NOT NULL
+                quantity REAL NOT NULL
             )
             """
         )
@@ -55,6 +54,15 @@ def init_db() -> None:
                 macro TEXT NOT NULL,
                 value REAL NOT NULL,
                 PRIMARY KEY (username, macro)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT,
+                timestamp TEXT
             )
             """
         )
@@ -125,42 +133,80 @@ class DBRecordManager:
 
     def create_record(self, user_id, timestamp, info):
         with _get_connection() as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO records (username, timestamp)
+                VALUES (?, ?)
+                """,
+                (user_id, timestamp.isoformat()),
+            )
+
+            record_id = cursor.lastrowid
+
             for fdc_id, quantity in info.items():
                 conn.execute(
                     """
-                    INSERT INTO log_entries (username, fdc_id, quantity, timestamp)
-                    VALUES (?, ?, ?, ?)
+                    INSERT INTO log_entries (record_id, fdc_id, quantity)
+                    VALUES (?, ?, ?)
                     """,
-                    (user_id, int(fdc_id), quantity, timestamp.isoformat()),
+                    (record_id, int(fdc_id), quantity),
                 )
             conn.commit()
 
     def query_user_records(self, user_id, start_time=None, end_time=None):
         # strings sort in order, so string comparison works for date filtering
-        sql = "SELECT id, fdc_id, quantity, timestamp FROM log_entries WHERE username = ?"
+        sql = """
+        SELECT 
+            l.record_id,
+            l.fdc_id,
+            l.quantity,
+            r.timestamp
+        FROM log_entries l
+        JOIN records r ON l.record_id = r.id
+        WHERE r.username = ?
+        """
+
+        # sql = "SELECT id, fdc_id, quantity, timestamp FROM log_entries WHERE username = ?"
         params = [user_id]
         if start_time:
             params.append(start_time.isoformat())
-            sql += " AND timestamp >= ?"
+            sql += " AND r.timestamp >= ?"
         if end_time:
             params.append(end_time.isoformat())
-            sql += " AND timestamp < ?"
-        sql += " ORDER BY id"
+            sql += " AND r.timestamp < ?"
+        
+        sql += "ORDER BY l.record_id, l.id"
 
         with _get_connection() as conn:
             rows = conn.execute(sql, params).fetchall()
-
-        results = OrderedDict()
+        
+        # Group queries together by record id
+        queries_by_record_id = OrderedDict()
+        record_timestamps = OrderedDict()
         for row in rows:
-            results[row["id"]] = Record(
-                timestamp=datetime.fromisoformat(row["timestamp"]),
-                info={row["fdc_id"]: row["quantity"]},
+            record_id = row["record_id"]
+            fdc_id = row["fdc_id"]
+            qty = row["quantity"]
+            
+            if record_id not in queries_by_record_id:
+                queries_by_record_id[record_id] = []
+
+                timestamp=datetime.fromisoformat(row["timestamp"])
+                record_timestamps[record_id] = timestamp
+
+            queries_by_record_id[record_id].append((fdc_id, qty))
+        
+        results = OrderedDict()
+        for r_id, queries in queries_by_record_id.items():
+            results[r_id] = Record(
+                timestamp=record_timestamps[r_id],
+                info={q[0]: q[1] for q in queries},
                 user_id=user_id,
-                record_id=row["id"],
+                record_id=r_id,
             )
         return results
 
     def remove_record(self, record_id):
         with _get_connection() as conn:
-            conn.execute("DELETE FROM log_entries WHERE id = ?", (record_id,))
+            conn.execute("DELETE FROM log_entries WHERE record_id = ?", (record_id,))
             conn.commit()

@@ -26,8 +26,17 @@ DEFAULT_GOALS = {"calories": 2000, "protein": 50, "carbs": 275, "fat": 78}
 record_manager = DBRecordManager()
 food_cache = load_food_cache()  # seeded from DB at startup, kept warm in memory
 
-# global — holds the last search only, shared across all users
-search_results = []
+# Global — holds the last search result for each user 
+search_results = {}
+
+# Global — holds the current selection of each user 
+selections = {}
+
+def get_user_selection(user):
+    if user not in selections:
+        selections[user] = {}
+
+    return selections[user]
 
 def get_totals(records):
     totals = {n: 0 for n in macro_types}
@@ -84,6 +93,8 @@ def compute_goal_stats(totals, goals):
 
 
 def render_main(start_date, end_date):
+    global search_results
+
     start = datetime.strptime(start_date, "%Y-%m-%d")
     end = datetime.strptime(end_date, "%Y-%m-%d")
     records = record_manager.query_user_records(g.user["username"], start, end)
@@ -92,10 +103,19 @@ def render_main(start_date, end_date):
 
     goals = get_user_goals(g.user["username"])
     goal_stats = compute_goal_stats(totals, goals)
+    
+    # If the user has no cached search results, 
+    # init the search results
+    user = g.user["username"]
+    if user not in search_results:
+        search_results[user] = []
 
+    selection = get_user_selection(user)
+
+    
     return render_template(
         'index.html',
-        results=search_results,
+        results=search_results[user],
         log=log,
         food_cache=food_cache,
         totals=totals,
@@ -106,6 +126,7 @@ def render_main(start_date, end_date):
         macro_types=macro_types,
         macro_units=macro_units,
         goal_stats=goal_stats,
+        selection=selection,
     )
 
 
@@ -115,28 +136,53 @@ def index():
     start_date, end_date = get_selected_dates(request)
     return render_main(start_date, end_date)
 
-@app.route('/handle_form', methods=['POST'])
+@app.route('/handle_search', methods=['POST'])
 @login_required
-def handle_form():
+def handle_search():
     global search_results
+
     user_input = request.form.get('query')
-    search_results = search_food(user_input)
-    update_food_cache(search_results)
+    user = g.user["username"]
+        
+    search_results[user] = search_food(user_input)
+    update_food_cache(search_results[user])
     start_date, end_date = get_selected_dates(request)
 
     return render_main(start_date, end_date)
+
+@app.route('/update_selection', methods=['POST'])
+@login_required
+def update_selection():
+    food_id = int(request.form.get('fdc_id'))
+    quantity = int(request.form.get('quantity'))
+
+    user = g.user["username"]
+    selection = get_user_selection(user)
     
+    if quantity == 0 and food_id in selection:
+        del selection[food_id]
+    elif quantity > 0:
+        # Update the user's selection
+        selection[food_id] = quantity
+    
+    start_date, end_date = get_selected_dates(request)
+    return render_main(start_date, end_date)
+
 @app.route('/update_log', methods=['POST'])
 @login_required
 def update_log():
-    food_id = int(request.form.get('fdc_id'))
-    quantity = int(request.form.get('quantity'))
     t = request.form.get('time')
     try:
         time_stamp = datetime.strptime(t, "%Y-%m-%dT%H:%M")
-    except (ValueError, TypeError):
+    except (ValueError, TypeError) as e:
         time_stamp = datetime.now()
-    record_manager.create_record(g.user["username"], time_stamp, {food_id: quantity})
+
+    user = g.user["username"]
+    selection = get_user_selection(user)
+
+    record_manager.create_record(user, time_stamp, selection)
+    
+    selection.clear()
 
     start_date, end_date = get_selected_dates(request)
     return render_main(start_date, end_date)
