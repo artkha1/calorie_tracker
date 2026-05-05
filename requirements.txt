@@ -7,3 +7,4 @@ usda-fdc
 flask
 flask-sqlalchemy
 python-dotenv
+supabase
