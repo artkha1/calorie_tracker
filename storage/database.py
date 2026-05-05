@@ -1,124 +1,87 @@
-import sqlite3
+import os
 from collections import OrderedDict
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
-DB_PATH = Path(__file__).resolve().parent / "calorie_tracker.db"
+from dotenv import load_dotenv
+
+# Resolve project root so .env loads even when cwd differs (e.g. IDE runners).
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+load_dotenv(_PROJECT_ROOT / ".env")
+
+from supabase import Client, create_client
 
 DEFAULT_GOALS = {"calories": 2000, "protein": 50, "carbs": 275, "fat": 78}
 
+# PostgreSQL reserved word — PostgREST requires a quoted identifier.
+_LOG_TS_COL = '"timestamp"'
+_LOG_SELECT = 'id,fdc_id,quantity,"timestamp"'
 
-def _get_connection() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+_client: Optional[Client] = None
+
+
+def get_supabase() -> Client:
+    global _client
+    if _client is None:
+        url = (os.getenv("SUPABASE_URL") or "").strip()
+        key = (os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
+        if not url or not key:
+            raise RuntimeError(
+                "Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in your environment or .env file."
+            )
+        _client = create_client(url, key)
+    return _client
 
 
 def init_db() -> None:
-    with _get_connection() as conn:
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT UNIQUE NOT NULL,
-                password TEXT NOT NULL
-            )
-            """
-        )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS food_cache (
-                fdc_id INTEGER PRIMARY KEY,
-                name TEXT,
-                calories REAL,
-                protein REAL,
-                fat REAL,
-                carbs REAL
-            )
-            """
-        )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS log_entries (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                record_id INTEGER NOT NULL,
-                fdc_id INTEGER NOT NULL,
-                quantity REAL NOT NULL
-            )
-            """
-        )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS goals (
-                username TEXT NOT NULL,
-                macro TEXT NOT NULL,
-                value REAL NOT NULL,
-                PRIMARY KEY (username, macro)
-            )
-            """
-        )
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS records (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT,
-                timestamp TEXT
-            )
-            """
-        )
-        conn.commit()
+    """Ensure Supabase credentials are present. Create tables in Supabase SQL Editor."""
+    get_supabase()
 
 def save_food(food: dict) -> None:
-    with _get_connection() as conn:
-        conn.execute(
-            """
-            INSERT OR REPLACE INTO food_cache (fdc_id, name, calories, protein, fat, carbs)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (
-                int(food.get("fdc_id")),
-                food.get("name"),
-                food.get("calories"),
-                food.get("protein"),
-                food.get("fat"),
-                food.get("carbs"),
-            ),
-        )
-        conn.commit()
+    sb = get_supabase()
+    payload = {
+        "fdc_id": int(food.get("fdc_id")),
+        "name": food.get("name"),
+        "calories": food.get("calories"),
+        "protein": food.get("protein"),
+        "fat": food.get("fat"),
+        "carbs": food.get("carbs"),
+    }
+    sb.table("food_cache").upsert(payload, on_conflict="fdc_id").execute()
 
 
 def load_food_cache() -> dict:
-    with _get_connection() as conn:
-        rows = conn.execute(
-            "SELECT fdc_id, name, calories, protein, fat, carbs FROM food_cache"
-        ).fetchall()
-    return {row["fdc_id"]: dict(row) for row in rows}
+    sb = get_supabase()
+    res = sb.table("food_cache").select(
+        "fdc_id,name,calories,protein,fat,carbs"
+    ).execute()
+    rows = res.data or []
+    return {int(r["fdc_id"]): dict(r) for r in rows}
+
 
 def get_user_goals(username: str) -> dict:
-    with _get_connection() as conn:
-        rows = conn.execute(
-            "SELECT macro, value FROM goals WHERE username = ?", (username,)
-        ).fetchall()
-    if not rows:
-        return dict(DEFAULT_GOALS)
-    # start from defaults so any macro not yet saved still has a value
+    sb = get_supabase()
+    res = (
+        sb.table("goals")
+        .select("macro,value")
+        .eq("username", username)
+        .execute()
+    )
+    rows = res.data or []
     goals = dict(DEFAULT_GOALS)
-    for row in rows:
-        goals[row["macro"]] = row["value"]
+    for r in rows:
+        goals[r["macro"]] = r["value"]
     return goals
 
 
 def set_user_goals(username: str, goals: dict) -> None:
-    with _get_connection() as conn:
-        for macro, value in goals.items():
-            conn.execute(
-                """
-                INSERT OR REPLACE INTO goals (username, macro, value)
-                VALUES (?, ?, ?)
-                """,
-                (username, macro, value),
-            )
-        conn.commit()
+    sb = get_supabase()
+    payload = [
+        {"username": username, "macro": macro, "value": value}
+        for macro, value in goals.items()
+    ]
+    sb.table("goals").upsert(payload, on_conflict="username,macro").execute()
 
 
 class Record:
@@ -130,72 +93,73 @@ class Record:
 
 
 class DBRecordManager:
-
     def create_record(self, user_id, timestamp, info):
-        with _get_connection() as conn:
-            cursor = conn.execute(
-                """
-                INSERT INTO records (username, timestamp)
-                VALUES (?, ?)
-                """,
-                (user_id, timestamp.isoformat()),
+        sb = get_supabase()
+
+        # Step 1: create record
+        rec_res = (
+            sb.table("records")
+            .insert(
+                {
+                    "username": user_id,
+                    "timestamp": timestamp.isoformat(),
+                }
             )
+            .execute()
+        )
 
-            record_id = cursor.lastrowid
+        record = rec_res.data[0]
+        record_id = record["id"]
 
-            for fdc_id, quantity in info.items():
-                conn.execute(
-                    """
-                    INSERT INTO log_entries (record_id, fdc_id, quantity)
-                    VALUES (?, ?, ?)
-                    """,
-                    (record_id, int(fdc_id), quantity),
-                )
-            conn.commit()
+        # Step 2: insert log entries
+        payload = [
+            {
+                "record_id": record_id,
+                "fdc_id": int(fdc_id),
+                "quantity": quantity,
+            }
+            for fdc_id, quantity in info.items()
+        ]
+
+        if payload:
+            sb.table("log_entries").insert(payload).execute()
 
     def query_user_records(self, user_id, start_time=None, end_time=None):
-        # strings sort in order, so string comparison works for date filtering
-        sql = """
-        SELECT 
-            l.record_id,
-            l.fdc_id,
-            l.quantity,
-            r.timestamp
-        FROM log_entries l
-        JOIN records r ON l.record_id = r.id
-        WHERE r.username = ?
-        """
+        sb = get_supabase()
 
-        # sql = "SELECT id, fdc_id, quantity, timestamp FROM log_entries WHERE username = ?"
-        params = [user_id]
+        q = (
+            sb.table("log_entries")
+            .select("record_id, fdc_id, quantity, records!inner(username, timestamp)")
+            .eq("records.username", user_id)
+            .order("record_id")
+        )
+
         if start_time:
-            params.append(start_time.isoformat())
-            sql += " AND r.timestamp >= ?"
+            q = q.gte("records.timestamp", start_time.isoformat())
         if end_time:
-            params.append(end_time.isoformat())
-            sql += " AND r.timestamp < ?"
-        
-        sql += "ORDER BY l.record_id, l.id"
+            q = q.lt("records.timestamp", end_time.isoformat())
 
-        with _get_connection() as conn:
-            rows = conn.execute(sql, params).fetchall()
-        
-        # Group queries together by record id
+        res = q.execute()
+        rows = res.data or []
+
         queries_by_record_id = OrderedDict()
-        record_timestamps = OrderedDict()
+        record_timestamps = {}
+
         for row in rows:
-            record_id = row["record_id"]
+            r_id = row["record_id"]
             fdc_id = row["fdc_id"]
             qty = row["quantity"]
-            
-            if record_id not in queries_by_record_id:
-                queries_by_record_id[record_id] = []
 
-                timestamp=datetime.fromisoformat(row["timestamp"])
-                record_timestamps[record_id] = timestamp
+            ts_raw = row["records"]["timestamp"]
+            if isinstance(ts_raw, str) and ts_raw.endswith("Z"):
+                ts_raw = ts_raw[:-1] + "+00:00"
 
-            queries_by_record_id[record_id].append((fdc_id, qty))
-        
+            if r_id not in queries_by_record_id:
+                queries_by_record_id[r_id] = []
+                record_timestamps[r_id] = datetime.fromisoformat(ts_raw)
+
+            queries_by_record_id[r_id].append((fdc_id, qty))
+
         results = OrderedDict()
         for r_id, queries in queries_by_record_id.items():
             results[r_id] = Record(
@@ -204,9 +168,11 @@ class DBRecordManager:
                 user_id=user_id,
                 record_id=r_id,
             )
+
         return results
 
     def remove_record(self, record_id):
-        with _get_connection() as conn:
-            conn.execute("DELETE FROM log_entries WHERE record_id = ?", (record_id,))
-            conn.commit()
+        sb = get_supabase()
+
+        sb.table("log_entries").delete().eq("record_id", record_id).execute()
+        sb.table("records").delete().eq("id", record_id).execute()       
