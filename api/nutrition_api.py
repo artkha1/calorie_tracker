@@ -1,10 +1,13 @@
-from usda_fdc import FdcClient, FdcApiError, FdcAuthError
 import os
+from pathlib import Path
+
 from dotenv import load_dotenv
+from usda_fdc import FdcClient, FdcApiError, FdcAuthError
+
 from ml.ml_utils import deduplicate_foods
 
-# Load API key from .env file
-load_dotenv()
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+load_dotenv(_PROJECT_ROOT / ".env")
 API_KEY = os.getenv("FDC_API_KEY")
 
 client = FdcClient(API_KEY)

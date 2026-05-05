@@ -1,16 +1,72 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
     <title>Calorie Tracker</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            margin: 20px;
+            margin: 0;
             background-color: #f5f5f5;
         }
 
-        h1 {
+        #toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 20px;
+            background: #fff;
+            border-bottom: 1px solid #ddd;
+            margin-bottom: 16px;
+        }
+
+        #toolbar h1 {
+            margin: 0;
+            font-size: 1.35rem;
             color: #2e7d32;
+        }
+
+        .toolbar-auth {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            font-size: 14px;
+        }
+
+        .toolbar-auth button {
+            padding: 8px 14px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .btn-outline {
+            background: #fff;
+            border: 1px solid #2e7d32 !important;
+            color: #2e7d32;
+        }
+
+        .btn-filled {
+            background: #2e7d32;
+            color: #fff;
+        }
+
+        .btn-outline:hover { background: #e8f5e9; }
+        .btn-filled:hover { background: #1b5e20; }
+
+        #main-wrap {
+            padding: 0 20px 40px;
+        }
+
+        .flash-banner {
+            margin: 0 20px 12px;
+            padding: 10px 14px;
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 6px;
+            color: #856404;
+            font-size: 14px;
         }
 
         h2 {
@@ -47,13 +103,8 @@
             align-items: flex-start;
         }
 
-        .results-section {
-            flex: 1;
-        }
-
-        .right-side {
-            flex: 1;
-        }
+        .results-section { flex: 1; }
+        .right-side { flex: 1; }
 
         .food-item {
             background: white;
@@ -79,6 +130,7 @@
             display: flex;
             align-items: center;
             gap: 8px;
+            flex-wrap: wrap;
         }
 
         .food-item input[type="number"] {
@@ -98,9 +150,7 @@
             font-size: 13px;
         }
 
-        .food-item button:hover {
-            background-color: #1b5e20;
-        }
+        .food-item button:hover { background-color: #1b5e20; }
 
         table {
             width: 100%;
@@ -125,30 +175,6 @@
             background-color: #fafafa;
         }
 
-        .edit-form {
-            display: flex;
-            gap: 4px;
-            align-items: center;
-        }
-
-        .edit-form input {
-            width: 45px;
-            padding: 3px;
-            border: 1px solid #ccc;
-            border-radius: 3px;
-            font-size: 12px;
-        }
-
-        .edit-form button {
-            padding: 3px 8px;
-            background-color: #1976d2;
-            color: white;
-            border: none;
-            border-radius: 3px;
-            cursor: pointer;
-            font-size: 12px;
-        }
-
         .delete-btn {
             padding: 3px 8px;
             background-color: #c62828;
@@ -166,7 +192,6 @@
             padding: 15px;
             margin-top: 20px;
             margin-bottom: 20px;
-
         }
 
         .totals-box p {
@@ -179,25 +204,23 @@
             color: #2e7d32;
         }
 
-        /* Macro goal cards */
         .goals-section { margin-bottom: 20px; }
         .goals-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
- 
+
         .goal-card { background: white; border: 1px solid #ddd; border-radius: 6px; padding: 12px; }
         .goal-card .macro-label { font-size: 12px; font-weight: bold; color: #555; text-transform: uppercase; margin-bottom: 6px; }
         .goal-card .goal-stats { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px; }
         .goal-card .consumed { font-weight: bold; color: #2e7d32; }
         .goal-card .consumed.over { color: #c62828; }
         .goal-card .goal-val { color: #888; }
- 
+
         .progress-bar-bg { background: #e0e0e0; border-radius: 8px; height: 10px; width: 100%; overflow: hidden; }
         .progress-bar-fill { height: 100%; border-radius: 8px; background: #2e7d32; transition: width 0.3s ease; }
         .progress-bar-fill.over { background: #c62828; }
- 
+
         .goal-remaining { font-size: 11px; color: #888; margin-top: 4px; }
         .goal-remaining.over { color: #c62828; }
 
-        /* Set goals form */
         .set-goals-card { background: white; border: 1px solid #ddd; border-radius: 6px; padding: 12px; }
         .set-goals-card h3 { margin: 0 0 10px 0; font-size: 14px; color: #333; }
         .goals-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
@@ -205,219 +228,456 @@
         .goals-form-grid input { width: 100%; padding: 4px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; box-sizing: border-box; }
         .set-goals-card button { padding: 5px 14px; background-color: #1976d2; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
         .set-goals-card button:hover { background-color: #1565c0; }
+
+        /* Modal overlays */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+            background: rgba(0, 0, 0, 0.35);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .modal-overlay.open {
+            display: flex;
+        }
+
+        .modal-card {
+            background: #fff;
+            border-radius: 10px;
+            padding: 24px 28px;
+            max-width: 380px;
+            width: 100%;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+            position: relative;
+        }
+
+        .modal-card h2 {
+            margin: 0 0 16px 0;
+            font-size: 1.25rem;
+            color: #333;
+        }
+
+        .modal-card .field {
+            margin-bottom: 12px;
+        }
+
+        .modal-card label {
+            display: block;
+            font-size: 12px;
+            color: #555;
+            margin-bottom: 4px;
+        }
+
+        .modal-card input[type="text"],
+        .modal-card input[type="password"] {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        .modal-card button[type="submit"] {
+            width: 100%;
+            margin-top: 8px;
+            padding: 10px;
+            background: #2e7d32;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .modal-card button[type="submit"]:hover {
+            background: #1b5e20;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 12px;
+            right: 14px;
+            background: none;
+            border: none;
+            font-size: 22px;
+            line-height: 1;
+            cursor: pointer;
+            color: #888;
+        }
+
+        .modal-close:hover { color: #333; }
+
+        .modal-switch {
+            margin-top: 14px;
+            font-size: 13px;
+            color: #555;
+            text-align: center;
+        }
+
+        .modal-switch a, .modal-switch button.link {
+            color: #1976d2;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 0;
+            font: inherit;
+            text-decoration: underline;
+        }
+
+        .modal-error {
+            color: #c62828;
+            font-size: 13px;
+            margin-bottom: 10px;
+        }
+
+        body.modal-open {
+            overflow: hidden;
+        }
     </style>
 </head>
-<body>
-    <h1>Calorie Tracker</h1>
-    <p>
-        Logged in as <strong>{{ g.user["username"] }}</strong>
-        | <a href="{{ url_for('auth.logout') }}">Logout</a>
-    </p>
-
-    <!-- Search bar -->
-    <div class="search-bar">
-        <form action="/handle_form" method="POST" style="display: flex; gap: 8px;">
-            <input type="text" name="query" placeholder="Search for a food..." required>
-            <button type="submit">Search</button>
-            <input type="hidden" name="start_date" value="{{ start_date }}">
-            <input type="hidden" name="end_date" value="{{ end_date }}">
-
-        </form>
-    </div>
-
-    <div class="main-content">
-        <!-- Search results -->
-        <div class="results-section">
-            <h2>Search Results</h2>
-            {% if results %}
-                {% for food in results %}
-                <div class="food-item">
-                    <h3>{{ food["name"] }}</h3>
-                    <p>Calories: {{ food.get("calories", 0) }}</p>
-                    <p>Protein: {{ food.get("protein", 0) }}g</p>
-                    <p>Carbs: {{ food.get("carbs", 0) }}g</p>
-                    <p>Fat: {{ food.get("fat", 0) }}g</p>
-                    <form action="/update_log" method="POST">
-                        <input type="hidden" name="fdc_id" value="{{ food['fdc_id'] }}">
-                        <input type="number" name="quantity" value="1" min="1">
-                        <input type="hidden" name="start_date" value="{{ start_date }}">
-                        <input type="hidden" name="end_date" value="{{ end_date }}">
-
-                        <input type="datetime-local" name="time" value="{{ curr_time }}">
-                        <button type="submit">Add</button>
-                    </form>
-                </div>
-                {% endfor %}
+<body
+    data-logged-in="{{ 'true' if g.user else 'false' }}"
+    data-open-login="{{ 'true' if open_login else 'false' }}"
+    data-open-register="{{ 'true' if open_register else 'false' }}"
+>
+    <div id="toolbar">
+        <h1>Calorie Tracker</h1>
+        <div class="toolbar-auth">
+            {% if g.user %}
+                <span>Signed in as <strong>{{ g.user["username"] }}</strong></span>
+                <a href="{{ url_for('auth.logout') }}"><button type="button" class="btn-outline">Log out</button></a>
             {% else %}
-                <p style="color: #888;">No results yet. Try searching for something above.</p>
+                <button type="button" class="btn-outline" id="btn-open-login">Sign in</button>
+                <button type="button" class="btn-filled" id="btn-open-register">Register</button>
             {% endif %}
         </div>
+    </div>
 
-        <!-- Right side: goal + log -->
-        <div class="right-side">
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            <div class="flash-banner">
+                {% for message in messages %}
+                    <div>{{ message }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
 
-            <!-- Macro goal cards -->
-            <div class="goals-section">
-                <h2>Daily Goals</h2>
-                <div class="goals-grid">
-                    {% for macro in macro_types %}
-                    {% set s = goal_stats[macro] %}
-                    <div class="goal-card">
-                        <div class="macro-label">{{ macro }}{% if macro_units[macro] %} ({{ macro_units[macro] }}){% endif %}</div>
-                        <div class="goal-stats">
-                            <span class="consumed {% if s.over > 0 %}over{% endif %}">{{ s.consumed }}{{ macro_units[macro] }}</span>
-                            <span class="goal-val">/ {{ s.goal }}{{ macro_units[macro] }}</span>
-                        </div>
-                        <div class="progress-bar-bg">
-                            <div class="progress-bar-fill {% if s.progress >= 100 %}over{% endif %}"
-                                 style="width: {{ s.progress }}%"></div>
-                        </div>
-                        <div class="goal-remaining {% if s.over > 0 %}over{% endif %}">
-                            {% if s.over > 0 %}
-                                +{{ s.over }}{{ macro_units[macro] }} over goal
-                            {% else %}
-                                {{ s.remaining }}{{ macro_units[macro] }} remaining
-                            {% endif %}
-                        </div>
+    <div id="main-wrap">
+        <!-- Search — works without login -->
+        <div class="search-bar">
+            <form action="{{ url_for('handle_form') }}" method="POST" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <input type="text" name="query" placeholder="Search for a food..." required>
+                <button type="submit">Search</button>
+                <input type="hidden" name="start_date" value="{{ start_date }}">
+                <input type="hidden" name="end_date" value="{{ end_date }}">
+            </form>
+        </div>
+
+        <div class="main-content">
+            <div class="results-section">
+                <h2>Search Results</h2>
+                {% if results %}
+                    {% for food in results %}
+                    <div class="food-item">
+                        <h3>{{ food["name"] }}</h3>
+                        <p>Calories: {{ food.get("calories", 0) }}</p>
+                        <p>Protein: {{ food.get("protein", 0) }}g</p>
+                        <p>Carbs: {{ food.get("carbs", 0) }}g</p>
+                        <p>Fat: {{ food.get("fat", 0) }}g</p>
+                        <form class="js-require-auth" action="{{ url_for('update_log') }}" method="POST">
+                            <input type="hidden" name="fdc_id" value="{{ food['fdc_id'] }}">
+                            <input type="number" name="quantity" value="1" min="1">
+                            <input type="hidden" name="start_date" value="{{ start_date }}">
+                            <input type="hidden" name="end_date" value="{{ end_date }}">
+                            <input type="datetime-local" name="time" value="{{ curr_time }}">
+                            <button type="submit">Add to log</button>
+                        </form>
                     </div>
                     {% endfor %}
-                </div>
+                {% else %}
+                    <p style="color: #888;">No results yet. Try searching for something above.</p>
+                {% endif %}
+            </div>
 
-                <!-- Set goals form -->
-                <div class="set-goals-card">
-                    <h3>Set Goals</h3>
-                    <form action="/set_goals" method="POST">
-                        <div class="goals-form-grid">
-                            {% for macro in macro_types %}
-                            <div>
-                                <label for="goal_{{ macro }}">{{ macro.capitalize() }}{% if macro_units[macro] %} ({{ macro_units[macro] }}){% endif %}</label>
-                                <input type="number" name="goal_{{ macro }}" id="goal_{{ macro }}"
-                                       value="{{ goal_stats[macro].goal }}" min="1" step="1">
+            <div class="right-side">
+                <div class="goals-section">
+                    <h2>Daily Goals</h2>
+                    <div class="goals-grid">
+                        {% for macro in macro_types %}
+                        {% set s = goal_stats[macro] %}
+                        <div class="goal-card">
+                            <div class="macro-label">{{ macro }}{% if macro_units[macro] %} ({{ macro_units[macro] }}){% endif %}</div>
+                            <div class="goal-stats">
+                                <span class="consumed {% if s.over > 0 %}over{% endif %}">{{ s.consumed }}{{ macro_units[macro] }}</span>
+                                <span class="goal-val">/ {{ s.goal }}{{ macro_units[macro] }}</span>
                             </div>
-                            {% endfor %}
+                            <div class="progress-bar-bg">
+                                <div class="progress-bar-fill {% if s.progress >= 100 %}over{% endif %}"
+                                     style="width: {{ s.progress }}%"></div>
+                            </div>
+                            <div class="goal-remaining {% if s.over > 0 %}over{% endif %}">
+                                {% if s.over > 0 %}
+                                    +{{ s.over }}{{ macro_units[macro] }} over goal
+                                {% else %}
+                                    {{ s.remaining }}{{ macro_units[macro] }} remaining
+                                {% endif %}
+                            </div>
                         </div>
-                        <input type="hidden" name="start_date" value="{{ start_date }}">
-                        <input type="hidden" name="end_date" value="{{ end_date }}">
-                        <button type="submit">Update Goals</button>
-                    </form>
+                        {% endfor %}
+                    </div>
+
+                    <div class="set-goals-card">
+                        <h3>Set Goals</h3>
+                        <form class="js-require-auth" action="{{ url_for('set_goals') }}" method="POST">
+                            <div class="goals-form-grid">
+                                {% for macro in macro_types %}
+                                <div>
+                                    <label for="goal_{{ macro }}">{{ macro.capitalize() }}{% if macro_units[macro] %} ({{ macro_units[macro] }}){% endif %}</label>
+                                    <input type="number" name="goal_{{ macro }}" id="goal_{{ macro }}"
+                                           value="{{ goal_stats[macro].goal }}" min="1" step="1">
+                                </div>
+                                {% endfor %}
+                            </div>
+                            <input type="hidden" name="start_date" value="{{ start_date }}">
+                            <input type="hidden" name="end_date" value="{{ end_date }}">
+                            <button type="submit">Update Goals</button>
+                        </form>
+                    </div>
                 </div>
-            </div>
 
-            <h2>Nutrition Log</h2>
+                <h2>Nutrition Log</h2>
 
-            <form method="GET" action="/" style="margin-bottom: 10px;">
-                <input type="date" name="start_date" value="{{ start_date }}">
-                <input type="date" name="end_date" value="{{ end_date }}">
+                <form class="js-require-auth" method="GET" action="{{ url_for('index') }}" style="margin-bottom: 10px;">
+                    <input type="date" name="start_date" value="{{ start_date }}">
+                    <input type="date" name="end_date" value="{{ end_date }}">
+                    <button type="submit">Load range</button>
+                </form>
 
-                <button type="submit">Load</button>
-            </form>
-            
-            <h3>Overview</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Food</th>
-                        <th>Servings</th>
-                        {% for type in macro_types %}
-                        <th>{{ type.capitalize() }}</th>
-                        {% endfor %}
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for f_id, qty in log.items() %}
-                    {% set food = food_cache[f_id] %}
-                    <tr>
-                        <td>{{ food["name"] }}</td>
-                        <td>{{ qty }}</td>
-                        {% for type in macro_types %}
-                        {% set val = food.get(type, 0) %}
-                        <td>
-                            {% if val is not none %}
-                                {{ (qty * val) | round(1) }}{{ macro_units[type] }}
-                            {% else %}
-                                —
-                            {% endif %}
-                        </td>
-                        {% endfor %}
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-
-            <div class="totals-box">
-                <h3 style="margin-top: 0;">Macro Totals</h3>
-                <p>Calories: <span>{{ totals["calories"] | round(1) }}</span></p>
-                <p>Protein: <span>{{ totals["protein"] | round(1) }}g</span></p>
-                <p>Carbs: <span>{{ totals["carbs"] | round(1) }}g</span></p>
-                <p>Fat: <span>{{ totals["fat"] | round(1) }}g</span></p>
-            </div>
-            
-            <div class="records-box">
-                <h3 style="margin-top: 0;">Records</h3>
-
+                <h3>Overview</h3>
                 <table>
                     <thead>
                         <tr>
-                            <th>Time</th>
-                            <th>Record</th>
-                            <th>Actions</th>
+                            <th>Food</th>
+                            <th>Servings</th>
+                            {% for type in macro_types %}
+                            <th>{{ type.capitalize() }}</th>
+                            {% endfor %}
                         </tr>
                     </thead>
                     <tbody>
-                        {% for r_id, record in records.items() %}
+                        {% for f_id, qty in log.items() %}
+                        {% set food = food_cache[f_id] %}
                         <tr>
-                            <td>{{ record.timestamp.strftime("%I:%M %p") }}</td>
-
+                            <td>{{ food["name"] }}</td>
+                            <td>{{ qty }}</td>
+                            {% for type in macro_types %}
+                            {% set val = food.get(type, 0) %}
                             <td>
-                                <details>
-                                    <summary>{{ record.info|length }} food(s)</summary>
-                                    <table class="inner-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Food</th>
-                                                <th>Qty</th>
-                                                {% for type in macro_types %}
-                                                <th>{{ type.capitalize() }}</th>
-                                                {% endfor %}
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {% for f_id, qty in record.info.items() %}
-                                            {% set food = food_cache[f_id] %}
-                                            <tr>
-                                                <td>{{ food["name"] }}</td>
-                                                <td>{{ qty }}</td>
-                                                {% for type in macro_types %}
-                                                {% set val = food.get(type, 0) %}
-                                                <td>
-                                                    {% if val is not none %}
-                                                        {{ (qty * val) | round(1) }}{{ macro_units[type] }}
-                                                    {% else %}
-                                                        —
-                                                    {% endif %}
-                                                </td>
-                                                {% endfor %}
-                                            </tr>
-                                            {% endfor %}
-                                        </tbody>
-                                    </table>
-                                </details>
+                                {% if val is not none %}
+                                    {{ (qty * val) | round(1) }}{{ macro_units[type] }}
+                                {% else %}
+                                    —
+                                {% endif %}
                             </td>
-                            <td>
-                                <form action="/delete_log" method="POST">
-                                    <input type="hidden" name="record_id" value="{{ r_id }}">
-                                    <input type="hidden" name="start_date" value="{{ start_date }}">
-                                    <input type="hidden" name="end_date" value="{{ end_date }}">
-                                    <button class="delete-btn" type="submit">Delete</button>
-                                </form>
-                            </td>
+                            {% endfor %}
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
-            </div>
 
+                <div class="totals-box">
+                    <h3 style="margin-top: 0;">Macro Totals</h3>
+                    <p>Calories: <span>{{ totals["calories"] | round(1) }}</span></p>
+                    <p>Protein: <span>{{ totals["protein"] | round(1) }}g</span></p>
+                    <p>Carbs: <span>{{ totals["carbs"] | round(1) }}g</span></p>
+                    <p>Fat: <span>{{ totals["fat"] | round(1) }}g</span></p>
+                </div>
+
+                <div class="records-box">
+                    <h3 style="margin-top: 0;">Records</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Record</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for r_id, record in records.items() %}
+                            <tr>
+                                <td>{{ record.timestamp.strftime("%I:%M %p") }}</td>
+                                <td>
+                                    <details>
+                                        <summary>{{ record.info|length }} food(s)</summary>
+                                        <table class="inner-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Food</th>
+                                                    <th>Qty</th>
+                                                    {% for type in macro_types %}
+                                                    <th>{{ type.capitalize() }}</th>
+                                                    {% endfor %}
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for f_id, qty in record.info.items() %}
+                                                {% set food = food_cache[f_id] %}
+                                                <tr>
+                                                    <td>{{ food["name"] }}</td>
+                                                    <td>{{ qty }}</td>
+                                                    {% for type in macro_types %}
+                                                    {% set val = food.get(type, 0) %}
+                                                    <td>
+                                                        {% if val is not none %}
+                                                            {{ (qty * val) | round(1) }}{{ macro_units[type] }}
+                                                        {% else %}
+                                                            —
+                                                        {% endif %}
+                                                    </td>
+                                                    {% endfor %}
+                                                </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </details>
+                                </td>
+                                <td>
+                                    <form class="js-require-auth" action="{{ url_for('delete_log') }}" method="POST">
+                                        <input type="hidden" name="record_id" value="{{ r_id }}">
+                                        <input type="hidden" name="start_date" value="{{ start_date }}">
+                                        <input type="hidden" name="end_date" value="{{ end_date }}">
+                                        <button class="delete-btn" type="submit">Delete</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
+
+    <!-- Login modal -->
+    <div id="modal-login" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="login-title">
+        <div class="modal-card">
+            <button type="button" class="modal-close" data-close-modal aria-label="Close">&times;</button>
+            <h2 id="login-title">Sign in</h2>
+            <form method="post" action="{{ url_for('auth.login') }}">
+                <div class="field">
+                    <label for="login-username">Username</label>
+                    <input id="login-username" type="text" name="username" required autocomplete="username">
+                </div>
+                <div class="field">
+                    <label for="login-password">Password</label>
+                    <input id="login-password" type="password" name="password" required autocomplete="current-password">
+                </div>
+                <button type="submit">Sign in</button>
+            </form>
+            <div class="modal-switch">
+                Need an account?
+                <button type="button" class="link" id="switch-to-register">Register</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Register modal -->
+    <div id="modal-register" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="register-title">
+        <div class="modal-card">
+            <button type="button" class="modal-close" data-close-modal aria-label="Close">&times;</button>
+            <h2 id="register-title">Create account</h2>
+            <form method="post" action="{{ url_for('auth.register') }}">
+                <div class="field">
+                    <label for="reg-username">Username</label>
+                    <input id="reg-username" type="text" name="username" required autocomplete="username">
+                </div>
+                <div class="field">
+                    <label for="reg-password">Password</label>
+                    <input id="reg-password" type="password" name="password" required autocomplete="new-password">
+                </div>
+                <button type="submit">Register</button>
+            </form>
+            <div class="modal-switch">
+                Already have an account?
+                <button type="button" class="link" id="switch-to-login">Sign in</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            var loggedIn = document.body.getAttribute("data-logged-in") === "true";
+
+            function warnNeedAuth() {
+                window.alert("Please sign in to use this feature.");
+            }
+
+            document.querySelectorAll("form.js-require-auth").forEach(function (form) {
+                form.addEventListener("submit", function (e) {
+                    if (!loggedIn) {
+                        e.preventDefault();
+                        warnNeedAuth();
+                    }
+                });
+            });
+
+            var loginEl = document.getElementById("modal-login");
+            var registerEl = document.getElementById("modal-register");
+
+            function openModal(which) {
+                document.body.classList.add("modal-open");
+                loginEl.classList.remove("open");
+                registerEl.classList.remove("open");
+                if (which === "login") loginEl.classList.add("open");
+                if (which === "register") registerEl.classList.add("open");
+            }
+
+            function closeModals() {
+                document.body.classList.remove("modal-open");
+                loginEl.classList.remove("open");
+                registerEl.classList.remove("open");
+            }
+
+            document.querySelectorAll("[data-close-modal]").forEach(function (btn) {
+                btn.addEventListener("click", closeModals);
+            });
+
+            loginEl.addEventListener("click", function (e) {
+                if (e.target === loginEl) closeModals();
+            });
+            registerEl.addEventListener("click", function (e) {
+                if (e.target === registerEl) closeModals();
+            });
+
+            var btnLogin = document.getElementById("btn-open-login");
+            var btnReg = document.getElementById("btn-open-register");
+            if (btnLogin) btnLogin.addEventListener("click", function () { openModal("login"); });
+            if (btnReg) btnReg.addEventListener("click", function () { openModal("register"); });
+
+            document.getElementById("switch-to-register").addEventListener("click", function () {
+                openModal("register");
+            });
+            document.getElementById("switch-to-login").addEventListener("click", function () {
+                openModal("login");
+            });
+
+            document.addEventListener("keydown", function (e) {
+                if (e.key === "Escape") closeModals();
+            });
+
+            if (document.body.getAttribute("data-open-login") === "true") openModal("login");
+            if (document.body.getAttribute("data-open-register") === "true") openModal("register");
+        })();
+    </script>
 </body>
 </html>
