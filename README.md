@@ -70,7 +70,7 @@ On a successful launch, the following should print:
 Note that the project's virtual environment must be activated whenever running the project.
 
 # Group Members
-Artem Khaiet - Code integration, Search Result Deduplication, Goal Tracking
+Artem Khaiet - Code integration, Search Result Deduplication, Goal Tracking, API Integration
 
 Leo Penn - UI, Database Design
 
