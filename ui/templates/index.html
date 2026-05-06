@@ -426,7 +426,7 @@
                         <input type="hidden" name="start_date" value="{{ start_date }}">
                         <input type="hidden" name="end_date" value="{{ end_date }}">
 
-                        <input type="datetime-local" name="time" value="{{ curr_time }}">
+                        <input type="datetime-local" name="log_time" value="{{ curr_time }}">
                         <button type="submit">Update Log</button>
                     </form>
 
@@ -466,10 +466,11 @@
                 <div class="search-bar">
                     <form action="{{ url_for('handle_search') }}" method="POST" style="display: flex; gap: 8px; flex-wrap: wrap;">
                         <input type="text" name="query" placeholder="Search for a food..." required>
-                        <button type="submit">Search</b                                <input type="datetime-local" name="time" value="{{ curr_time }}">
-utton>
+                        <button type="submit">Search</button>
+                            <!-- <input type="datetime-local" name="log_time" value="{{ curr_time }}"> -->
                         <input type="hidden" name="start_date" value="{{ start_date }}">
                         <input type="hidden" name="end_date" value="{{ end_date }}">
+                        <input type="hidden" name="log_time" value="{{ curr_time }}">
                     </form>
                 </div>
 
@@ -488,6 +489,7 @@ utton>
                                 <input type="number" name="quantity" value="1" min="1">
                                 <input type="hidden" name="start_date" value="{{ start_date }}">
                                 <input type="hidden" name="end_date" value="{{ end_date }}">
+                                <input type="hidden" name="log_time" value="{{ curr_time }}">
                                 <button type="submit">Update Selection</button>
                             </form>
                         </div>
@@ -539,6 +541,7 @@ utton>
                             </div>
                             <input type="hidden" name="start_date" value="{{ start_date }}">
                             <input type="hidden" name="end_date" value="{{ end_date }}">
+                            <input type="hidden" name="log_time" value="{{ curr_time }}">
                             <button type="submit">Update Goals</button>
                         </form>
                     </div>
@@ -572,7 +575,11 @@ utton>
                             {% for type in macro_types %}
                             {% set val = food.get(type, 0) %}
                             <td>
-
+                                {% if val is not none %}
+                                    {{ (qty * val) | round(1) }}{{ macro_units[type] }}
+                                {% else %}
+                                    —
+                                {% endif %}
                             </td>
                             {% endfor %}
                         </tr>
@@ -642,6 +649,7 @@ utton>
                                         <input type="hidden" name="record_id" value="{{ r_id }}">
                                         <input type="hidden" name="start_date" value="{{ start_date }}">
                                         <input type="hidden" name="end_date" value="{{ end_date }}">
+                                        <input type="hidden" name="log_time" value="{{ curr_time }}">
                                         <button class="delete-btn" type="submit">Delete</button>
                                     </form>
                                 </td>

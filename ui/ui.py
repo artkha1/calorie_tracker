@@ -73,6 +73,14 @@ def get_selected_dates(request):
     return start_date, end_date
 
 
+def get_log_time(request):
+    """Return the log time from the request, or default to now."""
+    log_time = request.args.get("log_time") or request.form.get("log_time")
+    if not log_time:
+        log_time = datetime.now().strftime("%Y-%m-%dT%H:%M")
+    return log_time
+
+
 def update_food_cache(results):
     for result in results:
         food_cache[int(result["fdc_id"])] = result
@@ -97,7 +105,7 @@ def compute_goal_stats(totals, goals):
     return stats
 
 
-def render_main(start_date, end_date, **extra):
+def render_main(start_date, end_date, log_time=None, **extra):
     start = datetime.strptime(start_date, "%Y-%m-%d")
     end = datetime.strptime(end_date, "%Y-%m-%d")
     user_search_results = []
@@ -117,7 +125,8 @@ def render_main(start_date, end_date, **extra):
         selection = {}
 
     log, totals = get_totals(records)
-    curr_time = datetime.now().strftime("%Y-%m-%dT%H:%M")
+    if log_time is None:
+        log_time = datetime.now().strftime("%Y-%m-%dT%H:%M")
     goal_stats = compute_goal_stats(totals, goals)
 
     
@@ -130,7 +139,7 @@ def render_main(start_date, end_date, **extra):
         records=records,
         start_date=start_date,
         end_date=end_date,
-        curr_time=curr_time,
+        curr_time=log_time,
         macro_types=macro_types,
         macro_units=macro_units,
         goal_stats=goal_stats,
@@ -161,9 +170,11 @@ def handle_search():
     update_food_cache(results)
 
     start_date, end_date = get_selected_dates(request)
+    log_time = request.form.get('log_time')
     return render_main(
         start_date, 
-        end_date, 
+        end_date,
+        log_time=log_time,
         open_login=request.args.get("login") == "1",
         open_register=request.args.get("register") == "1",
     )
@@ -173,7 +184,7 @@ def handle_search():
 def update_selection():
     user = g.user["username"]
     if user is None:
-        flash("Please sign in to add food to your log.")^M^M
+        flash("Please sign in to add food to your log.")
         return redirect(url_for("index", start_date=start_date, end_date=end_date))
 
     selection = get_user_selection(user)
@@ -187,8 +198,8 @@ def update_selection():
         selection[food_id] = quantity
 
     start_date, end_date = get_selected_dates(request)
-    
-    return render_main(start_date, end_date)
+    log_time = request.form.get('log_time')
+    return render_main(start_date, end_date, log_time=log_time)
 
 
 @app.route('/update_log', methods=['POST'])
@@ -196,12 +207,12 @@ def update_selection():
 def update_log():
     user = g.user["username"]
     if user is None:
-        flash("Please sign in to add food to your log.")^M^M
+        flash("Please sign in to add food to your log.")
         return redirect(url_for("index", start_date=start_date, end_date=end_date))
 
     selection = get_user_selection(user)
 
-    t = request.form.get('time')
+    t = request.form.get('log_time')
     try:
         timestamp = datetime.strptime(t, "%Y-%m-%dT%H:%M")
     except (ValueError, TypeError):
@@ -220,14 +231,15 @@ def update_log():
 def delete_log():
     user = g.user["username"]
     if user is None:
-        flash("Please sign in to add food to your log.")^M^M
+        flash("Please sign in to add food to your log.")
         return redirect(url_for("index", start_date=start_date, end_date=end_date))
 
     record_id = int(request.form.get('record_id'))
     record_manager.remove_record(record_id)
 
     start_date, end_date = get_selected_dates(request)
-    return render_main(start_date, end_date)
+    log_time = request.form.get('log_time')
+    return render_main(start_date, end_date, log_time=log_time)
 
 
 @app.route('/set_goals', methods=['POST'])
@@ -235,7 +247,7 @@ def delete_log():
 def set_goals():
     user = g.user["username"]
     if user is None:
-        flash("Please sign in to add food to your log.")^M^M
+        flash("Please sign in to add food to your log.")
         return redirect(url_for("index", start_date=start_date, end_date=end_date))
 
     goals = get_user_goals(user)
@@ -251,4 +263,5 @@ def set_goals():
     set_user_goals(user, goals)
 
     start_date, end_date = get_selected_dates(request)
-    return render_main(start_date, end_date)
+    log_time = request.form.get('log_time')
+    return render_main(start_date, end_date, log_time=log_time)
