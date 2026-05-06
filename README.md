@@ -12,7 +12,7 @@ A web-based calorie tracking application that allows users to search for foods, 
 
 ## Initializing Virtual Environment
 
-First, navigate to the project's source directory and run the following command:
+First, navigate to the project's source directory and create the enviornment by executing:
 
 ```
 python3 -m venv .venv
@@ -60,7 +60,7 @@ To run the project, execute:
 python3 main.py
 ```
 
-On a successful launch, the following should print:
+The following should print on a successful launch:
 
 ```
  * Serving Flask app 'ui.ui'
