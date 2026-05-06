@@ -71,6 +71,9 @@ Note that the project's virtual environment must be activated whenever running t
 
 # Group Members
 Artem Khaiet - Code integration, Search Result Deduplication, Goal Tracking
+
 Leo Penn - UI, Database Design
+
 Martin Gospodinov - User Auth, Cloud Storage
+
 Yassir Atlas - UI, Record Management 
