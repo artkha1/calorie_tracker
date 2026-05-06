@@ -10,6 +10,30 @@
             background-color: #f5f5f5;
         }
 
+        .left-side {
+            flex: 1;
+            min-width: 320px;
+        }
+
+        .right-side {
+            flex: 1;
+            min-width: 320px;
+        }
+
+        .main-content {
+            display: flex;
+            gap: 30px;
+            align-items: flex-start;
+        }
+
+        .left-side > * {
+            margin-bottom: 20px;
+        }
+
+        .right-side > * {
+            margin-bottom: 20px;
+        }
+
         #toolbar {
             display: flex;
             justify-content: space-between;
@@ -103,9 +127,6 @@
             align-items: flex-start;
         }
 
-        .results-section { flex: 1; }
-        .right-side { flex: 1; }
-
         .food-item {
             background: white;
             border: 1px solid #ddd;
@@ -177,7 +198,7 @@
 
         .delete-btn {
             padding: 3px 8px;
-            background-color: #c62828;
+            background: #f44336;
             color: white;
             border: none;
             border-radius: 3px;
@@ -202,6 +223,28 @@
         .totals-box span {
             font-weight: bold;
             color: #2e7d32;
+        }
+    
+        .user-selection h3 { margin: 0 0 10px 0; font-size: 14px; color: #333; }
+
+        .user-selection label { font-size: 12px; color: #555; display: block; margin-bottom: 2px; }
+        .user-selection input { width: 100%; padding: 4px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; box-sizing: border-box; }
+        .user-selection button { padding: 5px 14px; background-color: #1976d2; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
+        .user-selection button:hover { background-color: #1565c0; }
+
+        .user-selection form {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 0 0 10px 0;
+        }
+
+        .user-selection form input {
+            width: auto;   
+        }
+
+        .user-selection form button {
+            white-space: nowrap;
         }
 
         .goals-section { margin-bottom: 20px; }
@@ -343,6 +386,7 @@
         }
     </style>
 </head>
+
 <body
     data-logged-in="{{ 'true' if g.user else 'false' }}"
     data-open-login="{{ 'true' if open_login else 'false' }}"
@@ -372,40 +416,88 @@
     {% endwith %}
 
     <div id="main-wrap">
-        <!-- Search — works without login -->
-        <div class="search-bar">
-            <form action="{{ url_for('handle_form') }}" method="POST" style="display: flex; gap: 8px; flex-wrap: wrap;">
-                <input type="text" name="query" placeholder="Search for a food..." required>
-                <button type="submit">Search</button>
-                <input type="hidden" name="start_date" value="{{ start_date }}">
-                <input type="hidden" name="end_date" value="{{ end_date }}">
-            </form>
-        </div>
-
+        
         <div class="main-content">
-            <div class="results-section">
-                <h2>Search Results</h2>
-                {% if results %}
-                    {% for food in results %}
-                    <div class="food-item">
-                        <h3>{{ food["name"] }}</h3>
-                        <p>Calories: {{ food.get("calories", 0) }}</p>
-                        <p>Protein: {{ food.get("protein", 0) }}g</p>
-                        <p>Carbs: {{ food.get("carbs", 0) }}g</p>
-                        <p>Fat: {{ food.get("fat", 0) }}g</p>
-                        <form class="js-require-auth" action="{{ url_for('update_log') }}" method="POST">
-                            <input type="hidden" name="fdc_id" value="{{ food['fdc_id'] }}">
-                            <input type="number" name="quantity" value="1" min="1">
-                            <input type="hidden" name="start_date" value="{{ start_date }}">
-                            <input type="hidden" name="end_date" value="{{ end_date }}">
-                            <input type="datetime-local" name="time" value="{{ curr_time }}">
-                            <button type="submit">Add to log</button>
-                        </form>
-                    </div>
-                    {% endfor %}
-                {% else %}
-                    <p style="color: #888;">No results yet. Try searching for something above.</p>
-                {% endif %}
+            <div class = "left-side">
+                <div class="user-selection">
+                    <h2> Selection </h2>
+                    
+                    <form class="js-require-auth" action="/update_log" method="POST">
+                        <input type="hidden" name="start_date" value="{{ start_date }}">
+                        <input type="hidden" name="end_date" value="{{ end_date }}">
+
+                        <input type="datetime-local" name="log_time" value="{{ curr_time }}">
+                        <button type="submit">Update Log</button>
+                    </form>
+
+                    <table class="inner-table">
+                        <thead>
+                            <tr>
+                                <th>Food</th>
+                                <th>Servings</th>
+                                {% for type in macro_types %}
+                                <th>{{ type.capitalize() }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for f_id, qty in selection.items() %}
+                            {% set food = food_cache[f_id] %}
+                            <tr>
+                                <td>{{ food["name"] }}</td>
+                                <td>{{ qty }}</td>
+                                {% for type in macro_types %}
+                                {% set val = food.get(type, 0) %}
+                                <td>
+                                    {% if val is not none %}
+                                        {{ (qty * val) | round(1) }}{{ macro_units[type] }}
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Search — works without login -->
+                <div class="search-bar">
+                    <form action="{{ url_for('handle_search') }}" method="POST" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <input type="text" name="query" placeholder="Search for a food..." required>
+                        <button type="submit">Search</button>
+                            <!-- <input type="datetime-local" name="log_time" value="{{ curr_time }}"> -->
+                        <input type="hidden" name="start_date" value="{{ start_date }}">
+                        <input type="hidden" name="end_date" value="{{ end_date }}">
+                        <input type="hidden" name="log_time" value="{{ curr_time }}">
+                    </form>
+                </div>
+
+                <div class="results-section">
+                    <h2>Search Results</h2>
+                    {% if results %}
+                        {% for food in results %}
+                        <div class="food-item">
+                            <h3>{{ food["name"] }}</h3>
+                            <p>Calories: {{ food.get("calories", 0) }}</p>
+                            <p>Protein: {{ food.get("protein", 0) }}g</p>
+                            <p>Carbs: {{ food.get("carbs", 0) }}g</p>
+                            <p>Fat: {{ food.get("fat", 0) }}g</p>
+                            <form class="js-require-auth" action="{{ url_for('update_selection') }}" method="POST">
+                                <input type="hidden" name="fdc_id" value="{{ food['fdc_id'] }}">
+                                <input type="number" name="quantity" value="1" min="1">
+                                <input type="hidden" name="start_date" value="{{ start_date }}">
+                                <input type="hidden" name="end_date" value="{{ end_date }}">
+                                <input type="hidden" name="log_time" value="{{ curr_time }}">
+                                <button type="submit">Update Selection</button>
+                            </form>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <p style="color: #888;">No results yet. Try searching for something above.</p>
+                    {% endif %}
+                </div>
             </div>
 
             <div class="right-side">
@@ -449,6 +541,7 @@
                             </div>
                             <input type="hidden" name="start_date" value="{{ start_date }}">
                             <input type="hidden" name="end_date" value="{{ end_date }}">
+                            <input type="hidden" name="log_time" value="{{ curr_time }}">
                             <button type="submit">Update Goals</button>
                         </form>
                     </div>
@@ -556,6 +649,7 @@
                                         <input type="hidden" name="record_id" value="{{ r_id }}">
                                         <input type="hidden" name="start_date" value="{{ start_date }}">
                                         <input type="hidden" name="end_date" value="{{ end_date }}">
+                                        <input type="hidden" name="log_time" value="{{ curr_time }}">
                                         <button class="delete-btn" type="submit">Delete</button>
                                     </form>
                                 </td>

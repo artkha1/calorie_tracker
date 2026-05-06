@@ -38,7 +38,6 @@ def init_db() -> None:
     """Ensure Supabase credentials are present. Create tables in Supabase SQL Editor."""
     get_supabase()
 
-
 def save_food(food: dict) -> None:
     sb = get_supabase()
     payload = {
@@ -96,49 +95,84 @@ class Record:
 class DBRecordManager:
     def create_record(self, user_id, timestamp, info):
         sb = get_supabase()
-        for fdc_id, quantity in info.items():
-            sb.table("log_entries").insert(
+
+        # Step 1: create record
+        rec_res = (
+            sb.table("records")
+            .insert(
                 {
                     "username": user_id,
-                    "fdc_id": int(fdc_id),
-                    "quantity": quantity,
-                    "timestamp": timestamp.isoformat(),  # column name in DB is "timestamp"
+                    "timestamp": timestamp.isoformat(),
                 }
-            ).execute()
+            )
+            .execute()
+        )
+
+        record = rec_res.data[0]
+        record_id = record["id"]
+
+        # Step 2: insert log entries
+        payload = [
+            {
+                "record_id": record_id,
+                "fdc_id": int(fdc_id),
+                "quantity": quantity,
+            }
+            for fdc_id, quantity in info.items()
+        ]
+
+        if payload:
+            sb.table("log_entries").insert(payload).execute()
 
     def query_user_records(self, user_id, start_time=None, end_time=None):
         sb = get_supabase()
+
         q = (
             sb.table("log_entries")
-            .select(_LOG_SELECT)
-            .eq("username", user_id)
-            .order("id")
+            .select("record_id, fdc_id, quantity, records!inner(username, timestamp)")
+            .eq("records.username", user_id)
+            .order("record_id")
         )
 
         if start_time:
-            q = q.gte(_LOG_TS_COL, start_time.isoformat())
+            q = q.gte("records.timestamp", start_time.isoformat())
         if end_time:
-            q = q.lt(_LOG_TS_COL, end_time.isoformat())
+            q = q.lt("records.timestamp", end_time.isoformat())
 
         res = q.execute()
         rows = res.data or []
 
-        results = OrderedDict()
+        queries_by_record_id = OrderedDict()
+        record_timestamps = {}
+
         for row in rows:
-            ts_raw = row["timestamp"]
+            r_id = row["record_id"]
+            fdc_id = row["fdc_id"]
+            qty = row["quantity"]
+
+            ts_raw = row["records"]["timestamp"]
             if isinstance(ts_raw, str) and ts_raw.endswith("Z"):
                 ts_raw = ts_raw[:-1] + "+00:00"
-            results[row["id"]] = Record(
-                timestamp=datetime.fromisoformat(ts_raw),
-                info={row["fdc_id"]: row["quantity"]},
+
+            if r_id not in queries_by_record_id:
+                queries_by_record_id[r_id] = []
+                record_timestamps[r_id] = datetime.fromisoformat(ts_raw)
+
+            queries_by_record_id[r_id].append((fdc_id, qty))
+
+        results = OrderedDict()
+        for r_id, queries in queries_by_record_id.items():
+            results[r_id] = Record(
+                timestamp=record_timestamps[r_id],
+                info={q[0]: q[1] for q in queries},
                 user_id=user_id,
-                record_id=row["id"],
+                record_id=r_id,
             )
+
         return results
 
-    def remove_record(self, record_id, username: Optional[str] = None):
+    def remove_record(self, record_id):
         sb = get_supabase()
-        delete_q = sb.table("log_entries").delete().eq("id", record_id)
-        if username is not None:
-            delete_q = delete_q.eq("username", username)
-        delete_q.execute()
+
+        sb.table("log_entries").delete().eq("record_id", record_id).execute()
+        sb.table("records").delete().eq("id", record_id).execute()       
