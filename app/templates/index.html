@@ -271,6 +271,9 @@
         .goals-form-grid input { width: 100%; padding: 4px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; box-sizing: border-box; }
         .set-goals-card button { padding: 5px 14px; background-color: #1976d2; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
         .set-goals-card button:hover { background-color: #1565c0; }
+        .js-require-auth[method="GET"] button { padding: 5px 14px; background-color: #1976d2; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
+        .js-require-auth[method="GET"] input[type="date"] { padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; color: #333; cursor: pointer; }
+        .js-require-auth[method="GET"] input[type="date"]:focus { outline: none; border-color: #1976d2; box-shadow: 0 0 0 2px rgba(25,118,210,0.15); }
 
         /* Modal overlays */
         .modal-overlay {
@@ -426,7 +429,7 @@
                         <input type="hidden" name="start_date" value="{{ start_date }}">
                         <input type="hidden" name="end_date" value="{{ end_date }}">
 
-                        <input type="datetime-local" name="log_time" value="{{ curr_time }}">
+                        <input type="datetime-local" name="log_time" id="log-time-input" value="{{ curr_time }}">
                         <button type="submit">Update Log</button>
                     </form>
 
@@ -531,7 +534,7 @@
 
             <div class="right-side">
                 <div class="goals-section">
-                    <h2>Daily Goals</h2>
+                    <h2>Nutrient Goals</h2>
                     <div class="goals-grid">
                         {% for macro in macro_types %}
                         {% set s = goal_stats[macro] %}
@@ -578,11 +581,14 @@
 
                 <h2>Nutrition Log</h2>
 
-                <form class="js-require-auth" method="GET" action="{{ url_for('main.index') }}" style="margin-bottom: 10px;">
+                 <form class="js-require-auth" method="GET" action="{{ url_for('main.index') }}" style="margin-bottom: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    <span style="font-size: 13px; color: #555;">From</span>
                     <input type="date" name="start_date" value="{{ start_date }}">
+                    <span style="font-size: 13px; color: #555;">to</span>
                     <input type="date" name="end_date" value="{{ end_date }}">
                     <button type="submit">Load range</button>
                 </form>
+
 
                 <h3>Overview</h3>
                 <table>
@@ -800,7 +806,44 @@
 
             if (document.body.getAttribute("data-open-login") === "true") openModal("login");
             if (document.body.getAttribute("data-open-register") === "true") openModal("register");
+
+            // ----------------------------------------------------------------
+            // Set log time input to browser local time (avoids server UTC)
+            // ----------------------------------------------------------------
+            const logTimeInput = document.getElementById("log-time-input");
+            if (logTimeInput) {
+                const now = new Date();
+                const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+                logTimeInput.value = local.toISOString().slice(0, 16);
+
+                // Keep the hidden log_time fields in other forms in sync
+                document.querySelectorAll("input[name='log_time']").forEach(function (el) {
+                    if (el !== logTimeInput) el.value = logTimeInput.value;
+                });
+            }
+
+            // ----------------------------------------------------------------
+            // Search loading indicator
+            // ----------------------------------------------------------------
+            const searchForm = document.querySelector(".search-bar form");
+            const searchBtn  = searchForm && searchForm.querySelector("button[type=submit]");
+
+            if (searchForm && searchBtn) {
+                searchForm.addEventListener("submit", function () {
+                    // Show spinner immediately — browser will navigate on its
+                    // own since we don't call preventDefault()
+                    searchBtn.disabled = true;
+                    searchBtn.innerHTML =
+                        '<span style="display:inline-flex;align-items:center;gap:6px;">'
+                        + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="animation:spin 0.8s linear infinite;">'
+                        + '<path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>'
+                        + '</svg>Searching…</span>';
+                });
+            }
         })();
     </script>
+    <style>
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
 </body>
 </html>

@@ -7,6 +7,7 @@ thin glue between HTTP and the rest of the application.
 """
 
 from collections import OrderedDict
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 
 from flask import Blueprint, g, flash, redirect, render_template, request, url_for
@@ -75,6 +76,11 @@ def render_main(start_date: str, end_date: str, log_time: str = None, **extra):
 # Routes
 # ---------------------------------------------------------------------------
 
+@bp.route("/favicon.ico")
+def favicon():
+    return "", 204
+
+
 @bp.route("/")
 def index():
     start_date, end_date = get_selected_dates(request)
@@ -97,12 +103,20 @@ def handle_search():
     if is_natural_language(query):
         nl_items = parse_food_input(query)
         if nl_items:
+            # Search FDC for all parsed items in parallel
+            with ThreadPoolExecutor(max_workers=len(nl_items)) as executor:
+                fdc_futures = {
+                    executor.submit(search_food, item["food"]): item
+                    for item in nl_items
+                }
+
             auto_selection = {}
             logged_details = []
             all_results = []
+            seen_ids: set = set()
 
-            for item in nl_items:
-                item_results = search_food(item["food"])
+            for future, item in fdc_futures.items():
+                item_results = future.result()
                 if not item_results:
                     continue
                 top = item_results[0]
@@ -111,7 +125,8 @@ def handle_search():
                 auto_selection[fdc_id] = auto_selection.get(fdc_id, 0) + qty
                 logged_details.append({"name": top["name"], "quantity": qty, "fdc_id": fdc_id})
                 for food in item_results:
-                    if int(food["fdc_id"]) not in {int(r["fdc_id"]) for r in all_results}:
+                    if int(food["fdc_id"]) not in seen_ids:
+                        seen_ids.add(int(food["fdc_id"]))
                         all_results.append(food)
 
             if auto_selection:
@@ -188,7 +203,9 @@ def update_log():
 @bp.route("/delete_log", methods=["POST"])
 @login_required
 def delete_log():
-    record_manager.remove_record(int(request.form.get("record_id")))
+    username = g.user["username"]
+    record_id = int(request.form.get("record_id"))
+    record_manager.remove_record(record_id, username=username)
     start_date, end_date = get_selected_dates(request)
     return render_main(start_date, end_date, log_time=request.form.get("log_time"))
 

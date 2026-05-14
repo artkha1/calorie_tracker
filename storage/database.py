@@ -232,7 +232,15 @@ class DBRecordManager:
 
         return results
 
-    def remove_record(self, record_id):
+    def remove_record(self, record_id, username: str = None):
         with _get_conn() as conn:
+            if username is not None:
+                # Verify ownership before deleting
+                row = conn.execute(
+                    "SELECT id FROM records WHERE id = ? AND username = ?",
+                    (record_id, username),
+                ).fetchone()
+                if not row:
+                    return  # record doesn't exist or belongs to another user
             # log_entries deleted automatically via ON DELETE CASCADE
             conn.execute("DELETE FROM records WHERE id = ?", (record_id,))

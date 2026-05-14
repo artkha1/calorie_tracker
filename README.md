@@ -10,7 +10,7 @@ A web-based calorie tracking application built with Flask. Search for foods usin
 
 ## Features
 
-- **Natural language food logging** — type "2 eggs and a white toast with bacon" and the app uses the Gemini AI API to parse it into individual items, looks each one up, and logs them automatically with the correct quantities
+- **Natural language food logging** — type "2 eggs and a white toast with bacon" and the app uses the Gemini AI API to parse it into individual items, looks each one up in parallel, and logs them automatically with the correct quantities
 - **USDA FoodData Central search** — 600,000+ foods with full macro breakdown
 - **Daily macro goals** — set custom calorie, protein, carb, and fat targets with visual progress bars
 - **Date navigation** — browse and review logs for any past day
@@ -49,7 +49,7 @@ storage/
 ml/
     ml_utils.py       # food deduplication using cosine similarity
 tests/
-    tests.py          # pytest suite (unit tests, all external APIs mocked)
+    test_all.py          # pytest suite (unit tests, all external APIs mocked)
 ```
 
 ## Local setup
