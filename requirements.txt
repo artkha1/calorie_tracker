@@ -1,10 +1,24 @@
-pandas
-requests
-scikit-learn
-numpy
-usda-fdc
-flask
-python-dotenv
-gunicorn
-google-genai
-pytest
+# Web framework
+flask==3.1.3
+gunicorn==26.0.0
+
+# Environment & config
+python-dotenv==1.2.1
+
+# Data & ML
+numpy==2.4.3
+pandas==3.0.3
+scikit-learn==1.8.0
+
+# HTTP & APIs
+requests==2.33.1
+usda-fdc==0.1.9
+
+# AI - natural language food parsing (free tier, no credit card required)
+google-genai==2.2.0
+
+# Auth
+werkzeug==3.1.7
+
+# Testing
+pytest==9.0.3

@@ -462,9 +462,9 @@
                     </table>
                 </div>
 
-                <!-- Search -->
+                <!-- Search — works without login -->
                 <div class="search-bar">
-                    <form action="{{ url_for('handle_search') }}" method="POST" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <form action="{{ url_for('main.handle_search') }}" method="POST" style="display: flex; gap: 8px; flex-wrap: wrap;">
                         <input type="text" name="query" placeholder="Search or describe naturally, e.g. &quot;2 eggs and toast&quot;" required style="flex: 1; min-width: 200px;">
                         <button type="submit">Search</button>
                             <!-- <input type="datetime-local" name="log_time" value="{{ curr_time }}"> -->
@@ -483,7 +483,7 @@
                                 </span>
                             </div>
                             {% if nl_record_id is defined and nl_record_id %}
-                            <form action="{{ url_for('delete_log') }}" method="POST" style="margin: 0;">
+                            <form action="{{ url_for('main.delete_log') }}" method="POST" style="margin: 0;">
                                 <input type="hidden" name="record_id" value="{{ nl_record_id }}">
                                 <input type="hidden" name="start_date" value="{{ start_date }}">
                                 <input type="hidden" name="end_date" value="{{ end_date }}">
@@ -513,7 +513,7 @@
                             <p>Protein: {{ food.get("protein", 0) }}g</p>
                             <p>Carbs: {{ food.get("carbs", 0) }}g</p>
                             <p>Fat: {{ food.get("fat", 0) }}g</p>
-                            <form class="js-require-auth" action="{{ url_for('update_selection') }}" method="POST">
+                            <form class="js-require-auth" action="{{ url_for('main.update_selection') }}" method="POST">
                                 <input type="hidden" name="fdc_id" value="{{ food['fdc_id'] }}">
                                 <input type="number" name="quantity" value="1" min="1">
                                 <input type="hidden" name="start_date" value="{{ start_date }}">
@@ -558,7 +558,7 @@
 
                     <div class="set-goals-card">
                         <h3>Set Goals</h3>
-                        <form class="js-require-auth" action="{{ url_for('set_goals') }}" method="POST">
+                        <form class="js-require-auth" action="{{ url_for('main.set_goals') }}" method="POST">
                             <div class="goals-form-grid">
                                 {% for macro in macro_types %}
                                 <div>
@@ -578,7 +578,7 @@
 
                 <h2>Nutrition Log</h2>
 
-                <form class="js-require-auth" method="GET" action="{{ url_for('index') }}" style="margin-bottom: 10px;">
+                <form class="js-require-auth" method="GET" action="{{ url_for('main.index') }}" style="margin-bottom: 10px;">
                     <input type="date" name="start_date" value="{{ start_date }}">
                     <input type="date" name="end_date" value="{{ end_date }}">
                     <button type="submit">Load range</button>
@@ -674,7 +674,7 @@
                                     </details>
                                 </td>
                                 <td>
-                                    <form class="js-require-auth" action="{{ url_for('delete_log') }}" method="POST">
+                                    <form class="js-require-auth" action="{{ url_for('main.delete_log') }}" method="POST">
                                         <input type="hidden" name="record_id" value="{{ r_id }}">
                                         <input type="hidden" name="start_date" value="{{ start_date }}">
                                         <input type="hidden" name="end_date" value="{{ end_date }}">

@@ -61,7 +61,8 @@ def test_deduplicate_foods_keeps_distinct_items():
 # ui helper tests (no Flask app or DB needed)
 # ---------------------------------------------------------------------------
 
-from ui.ui import get_totals, compute_goal_stats, DEFAULT_GOALS
+from app.helpers import get_totals, compute_goal_stats
+from app.config import DEFAULT_GOALS
 from storage.database import Record
 
 
@@ -88,7 +89,7 @@ def test_get_totals_empty():
 
 def test_get_totals_single_food():
     records = OrderedDict({1: _make_record({1001: 2})})  # 2 servings of oats
-    with patch("ui.ui.food_cache", FOOD_CACHE):
+    with patch("app.state.food_cache", FOOD_CACHE):
         log, totals = get_totals(records)
     assert log[1001] == 2
     assert totals["calories"] == pytest.approx(300)
@@ -97,7 +98,7 @@ def test_get_totals_single_food():
 
 def test_get_totals_multiple_foods():
     records = OrderedDict({1: _make_record({1001: 1, 1002: 2})})
-    with patch("ui.ui.food_cache", FOOD_CACHE):
+    with patch("app.state.food_cache", FOOD_CACHE):
         log, totals = get_totals(records)
     assert totals["calories"] == pytest.approx(150 + 140)  # 1×150 + 2×70
     assert totals["protein"] == pytest.approx(5 + 12)
@@ -105,7 +106,7 @@ def test_get_totals_multiple_foods():
 
 def test_get_totals_skips_unknown_food():
     records = OrderedDict({1: _make_record({9999: 1})})  # not in cache
-    with patch("ui.ui.food_cache", FOOD_CACHE):
+    with patch("app.state.food_cache", FOOD_CACHE):
         log, totals = get_totals(records)
     assert 9999 not in log
     assert totals["calories"] == 0

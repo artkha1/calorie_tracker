@@ -24,7 +24,7 @@ def register():
         if error is None:
             try:
                 create_user(username, generate_password_hash(password))
-                return redirect(url_for("index"))
+                return redirect(url_for("main.index"))
             except sqlite3.IntegrityError:
                 error = "Username already exists."
             except Exception:
@@ -32,15 +32,15 @@ def register():
 
         if error:
             flash(error)
-        return redirect(url_for("index", register=1))
+        return redirect(url_for("main.index", register=1))
 
-    return redirect(url_for("index", register=1))
+    return redirect(url_for("main.index", register=1))
 
 
 @bp.route("/login", methods=("GET", "POST"))
 def login():
     if request.method == "GET":
-        return redirect(url_for("index", login=1))
+        return redirect(url_for("main.index", login=1))
 
     if request.method == "POST":
         username = request.form["username"].strip()
@@ -57,12 +57,12 @@ def login():
         if error is None:
             session.clear()
             session["username"] = user["username"]
-            return redirect(url_for("index"))
+            return redirect(url_for("main.index"))
 
         flash(error)
-        return redirect(url_for("index", login=1))
+        return redirect(url_for("main.index", login=1))
 
-    return redirect(url_for("index", login=1))
+    return redirect(url_for("main.index", login=1))
 
 
 @bp.before_app_request
@@ -74,14 +74,14 @@ def load_logged_in_user():
 @bp.route("/logout")
 def logout():
     session.clear()
-    return redirect(url_for("index"))
+    return redirect(url_for("main.index"))
 
 
 def login_required(view):
     @functools.wraps(view)
     def wrapped_view(**kwargs):
         if g.user is None:
-            return redirect(url_for("index", login=1))
+            return redirect(url_for("main.index", login=1))
         return view(**kwargs)
 
     return wrapped_view
