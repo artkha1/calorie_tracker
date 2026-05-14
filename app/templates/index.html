@@ -465,7 +465,7 @@
                 <!-- Search — works without login -->
                 <div class="search-bar">
                     <form action="{{ url_for('main.handle_search') }}" method="POST" style="display: flex; gap: 8px; flex-wrap: wrap;">
-                        <input type="text" name="query" placeholder="Search or describe naturally, e.g. &quot;2 eggs and toast&quot;" required style="flex: 1; min-width: 200px;">
+                        <input type="text" name="query" placeholder="Search or describe naturally, e.g. &quot;2 eggs and a white toast&quot;" required style="flex: 1; min-width: 200px;">
                         <button type="submit">Search</button>
                             <!-- <input type="datetime-local" name="log_time" value="{{ curr_time }}"> -->
                         <input type="hidden" name="start_date" value="{{ start_date }}">

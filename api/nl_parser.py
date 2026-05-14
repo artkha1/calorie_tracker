@@ -81,6 +81,7 @@ def parse_food_input(query: str) -> list[dict] | None:
         response = client.models.generate_content(
             model="gemini-2.5-flash",
             contents=f"{_SYSTEM}\n\nInput: {query}",
+            config={"http_options": {"timeout": 110}},  # just under 120 s specified by gunicorn
         )
         text = response.text.strip()
 

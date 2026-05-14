@@ -3,7 +3,7 @@ services:
     name: calorie-tracker
     runtime: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn "main:app"
+    startCommand: gunicorn --timeout 120 "main:app"
     envVars:
       - key: FDC_API_KEY
         sync: false          # set manually in Render dashboard

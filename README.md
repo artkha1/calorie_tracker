@@ -1,79 +1,124 @@
-# Introduction
+# Calorie Tracker
 
-## Calorie Tracker
+A web-based calorie tracking application built with Flask. Search for foods using the USDA FoodData Central database, log meals with natural language ("2 eggs and a slice of toast"), and track daily macro goals.
 
-A web-based calorie tracking application that allows users to search for foods, log meals, and analyze dietary intake.
+**[Live demo →](https://calorie-tracker-ncz7.onrender.com/)** *(may take ~30s to wake from sleep on free tier)*
 
-# Technical Architecture
+![CI](https://github.com/artkha1/calorie_tracker/actions/workflows/ci.yml/badge.svg)
 
-<img width="960" height="540" alt="CS 222 Final Presentation" src="https://github.com/user-attachments/assets/733fdcb5-1f00-403c-a698-f62e89852e89" />
+---
 
-# Environment Setup
+## Features
 
-## Initializing Virtual Environment
+- **Natural language food logging** — type "2 eggs and a white toast with bacon" and the app uses the Gemini AI API to parse it into individual items, looks each one up, and logs them automatically with the correct quantities
+- **USDA FoodData Central search** — 600,000+ foods with full macro breakdown
+- **Daily macro goals** — set custom calorie, protein, carb, and fat targets with visual progress bars
+- **Date navigation** — browse and review logs for any past day
+- **User accounts** — register, log in, and keep your data private
 
-First, navigate to the project's source directory and create the enviornment by executing:
+## Tech stack
 
-```
-python3 -m venv .venv
-```
+| Layer | Technology |
+|---|---|
+| Backend | Python, Flask |
+| Database | SQLite (via stdlib `sqlite3`) |
+| AI parsing | Google Gemini 2.5 Flash API |
+| Nutrition data | USDA FoodData Central API |
+| Deployment | Render (free tier) |
+| CI/CD | GitHub Actions |
 
-Then activate the environment.
-
-**Mac/Linux:**
-```
-source .venv/bin/activate
-```
-
-**Windows:**
-```
-.venv/Scripts/activate
-```
-
-## Package Installation
-
-To install required packages, run:
+## Project structure
 
 ```
+main.py               # entry point — creates and runs the Flask app
+app/
+    __init__.py       # create_app() factory — registers blueprints, seeds cache
+    config.py         # constants (macro types, default goals)
+    helpers.py        # pure business logic (totals, goal stats, cache updates)
+    routes.py         # all HTTP route handlers
+    state.py          # in-memory server state (food cache, selections)
+    auth/
+        auth.py       # auth blueprint (login, register, logout)
+    templates/
+        index.html    # single-page Jinja2 template
+api/
+    nutrition_api.py  # USDA FoodData Central wrapper
+    nl_parser.py      # Gemini-powered natural language food parser
+storage/
+    database.py       # SQLite layer (users, records, food cache, goals)
+ml/
+    ml_utils.py       # food deduplication using cosine similarity
+tests/
+    tests.py          # pytest suite (unit tests, all external APIs mocked)
+```
+
+## Local setup
+
+**1. Clone and create a virtual environment**
+
+```bash
+git clone https://github.com/artkha1/calorie_tracker.git
+cd calorie_tracker
+python -m venv venv
+
+# Mac/Linux
+source venv/bin/activate
+# Windows
+venv\Scripts\activate
+```
+
+**2. Install dependencies**
+
+```bash
 pip install -r requirements.txt
 ```
 
-## Setting API Keys
+**3. Set up environment variables**
 
-Before running the project, create a `.env` file in the root project directory. API keys must be set in `.env`. An example `.env` file is provided below:
+Copy `.env.example` to `.env` and fill in your keys:
 
-```
-FDC_API_KEY=
-SUPABASE_URL=
-SUPABASE_SERVICE_ROLE_KEY=
+```bash
+cp .env.example .env
 ```
 
-The `FDC_API_KEY` is used when querying nutritional information from the USDA FoodData Central API. The `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are used to access the project's backend database.
+| Variable | Where to get it |
+|---|---|
+| `FDC_API_KEY` | [fdc.nal.usda.gov/api-guide](https://fdc.nal.usda.gov/api-guide) — free, no credit card |
+| `GEMINI_API_KEY` | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) — free, no credit card |
+| `FLASK_SECRET_KEY` | Any random string: `python -c "import secrets; print(secrets.token_hex(32))"` |
 
-Get an FDC API key here: https://fdc.nal.usda.gov/api-guide
+**4. Run**
 
-# Project Instructions
-
-To run the project, execute:
-
-```
-python3 main.py
-```
-
-The following should print on a successful launch:
-
-```
- * Serving Flask app 'ui.ui'
- * Running on http://{IP}:{PORT}
+```bash
+python main.py
 ```
 
-Note that the project's virtual environment must be activated whenever running the project.
+The app will be available at `http://localhost:5000`.
 
-# Group Members
-Artem Khaiet - Code integration, Search Result Deduplication, Goal Tracking, API Integration
+## Running tests
 
-Leo Penn - UI, Database Design
+```bash
+pytest tests/ -v
+```
 
-Martin Gospodinov - User Auth, Cloud Storage
+All external API calls (Gemini, FDC) are mocked — tests run offline with no API keys needed.
 
-Yassir Atlas - UI, Record Management 
+## Deployment
+
+The app is configured for [Render](https://render.com) via `render.yaml`. To deploy your own instance:
+
+1. Fork the repo
+2. Sign up at render.com → New → Web Service → connect your fork
+3. Render will detect `render.yaml` and pre-fill all settings
+4. Set `FDC_API_KEY` and `GEMINI_API_KEY` in the Render dashboard under Environment
+5. Copy the deploy hook URL from Render into a GitHub secret named `RENDER_DEPLOY_HOOK`
+
+Every push to `main` will run the test suite via GitHub Actions and, if tests pass, trigger a redeploy automatically.
+
+> **Note:** The free Render tier uses an ephemeral filesystem — the SQLite database resets on each redeploy or restart. This is fine for a demo; for persistent storage, swap to Render's free Postgres or a hosted SQLite service like Turso.
+
+## Room for Improvement
+The USDA FDC API is, to put it simply, not the most accurate. There is no way to specify the serving size, and their methodology is questionable (the search result "blueberry" may be listed as having 250 calories, an equivalent of 3 cups). This is a proof of concept demo project, so data quality was not prioritized. Unfortunately, for now, it can't be used as a genuinely helpful nutrition tracker, but it is a potential area of improvement for the future.
+
+## Acknowledgements
+The core of this project was originally developed for CS 222 (Software Design Lab) at the University of Illinois at Urbana-Champaign with contributions from Yassir Atlas (UI, Record and Log Management), Martin Gospodinov (User Auth, Cloud Storage, originally on Supabase), and Leo Penn (UI, Database Design).

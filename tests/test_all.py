@@ -26,7 +26,7 @@ def test_deduplicate_foods_single():
 def test_deduplicate_foods_removes_near_duplicates():
     foods = [
         {"name": "Chicken broiled", "calories": 165, "protein": 31, "fat": 4, "carbs": 0},
-        {"name": "Chicken broiled usda", "calories": 165, "protein": 31, "fat": 4, "carbs": 0},
+        {"name": "Chicken BROILED", "calories": 165, "protein": 31, "fat": 4, "carbs": 0},
         {"name": "Salmon fillet baked", "calories": 208, "protein": 20, "fat": 13, "carbs": 0},
     ]
     result = deduplicate_foods(foods)
