@@ -1,5 +1,7 @@
 import os
+import sqlite3
 from collections import OrderedDict
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -10,65 +12,115 @@ from dotenv import load_dotenv
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(_PROJECT_ROOT / ".env")
 
-from supabase import Client, create_client
+# Database file lives at storage/calorie_tracker.db by default,
+# but can be overridden via the DATABASE_PATH env var (useful for tests).
+_DEFAULT_DB_PATH = Path(__file__).resolve().parent / "calorie_tracker.db"
+DB_PATH = Path(os.getenv("DATABASE_PATH", str(_DEFAULT_DB_PATH)))
 
 DEFAULT_GOALS = {"calories": 2000, "protein": 50, "carbs": 275, "fat": 78}
 
-# PostgreSQL reserved word — PostgREST requires a quoted identifier.
-_LOG_TS_COL = '"timestamp"'
-_LOG_SELECT = 'id,fdc_id,quantity,"timestamp"'
 
-_client: Optional[Client] = None
-
-
-def get_supabase() -> Client:
-    global _client
-    if _client is None:
-        url = (os.getenv("SUPABASE_URL") or "").strip()
-        key = (os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
-        if not url or not key:
-            raise RuntimeError(
-                "Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in your environment or .env file."
-            )
-        _client = create_client(url, key)
-    return _client
+@contextmanager
+def _get_conn():
+    """Yield a SQLite connection with row_factory and foreign-key support."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def init_db() -> None:
-    """Ensure Supabase credentials are present. Create tables in Supabase SQL Editor."""
-    get_supabase()
+    """Create all tables if they don't already exist."""
+    with _get_conn() as conn:
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS users (
+                username  TEXT PRIMARY KEY,
+                password  TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS food_cache (
+                fdc_id    INTEGER PRIMARY KEY,
+                name      TEXT,
+                calories  REAL,
+                protein   REAL,
+                fat       REAL,
+                carbs     REAL
+            );
+
+            CREATE TABLE IF NOT EXISTS goals (
+                username  TEXT NOT NULL,
+                macro     TEXT NOT NULL,
+                value     REAL NOT NULL,
+                PRIMARY KEY (username, macro),
+                FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS records (
+                id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                username  TEXT NOT NULL,
+                timestamp TEXT NOT NULL,
+                FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS log_entries (
+                id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                record_id INTEGER NOT NULL,
+                fdc_id    INTEGER NOT NULL,
+                quantity  REAL NOT NULL,
+                FOREIGN KEY (record_id) REFERENCES records(id) ON DELETE CASCADE
+            );
+        """)
+
+
+# ---------------------------------------------------------------------------
+# Food cache
+# ---------------------------------------------------------------------------
 
 def save_food(food: dict) -> None:
-    sb = get_supabase()
-    payload = {
-        "fdc_id": int(food.get("fdc_id")),
-        "name": food.get("name"),
-        "calories": food.get("calories"),
-        "protein": food.get("protein"),
-        "fat": food.get("fat"),
-        "carbs": food.get("carbs"),
-    }
-    sb.table("food_cache").upsert(payload, on_conflict="fdc_id").execute()
+    with _get_conn() as conn:
+        conn.execute("""
+            INSERT INTO food_cache (fdc_id, name, calories, protein, fat, carbs)
+            VALUES (:fdc_id, :name, :calories, :protein, :fat, :carbs)
+            ON CONFLICT(fdc_id) DO UPDATE SET
+                name     = excluded.name,
+                calories = excluded.calories,
+                protein  = excluded.protein,
+                fat      = excluded.fat,
+                carbs    = excluded.carbs
+        """, {
+            "fdc_id":   int(food.get("fdc_id")),
+            "name":     food.get("name"),
+            "calories": food.get("calories"),
+            "protein":  food.get("protein"),
+            "fat":      food.get("fat"),
+            "carbs":    food.get("carbs"),
+        })
 
 
 def load_food_cache() -> dict:
-    sb = get_supabase()
-    res = sb.table("food_cache").select(
-        "fdc_id,name,calories,protein,fat,carbs"
-    ).execute()
-    rows = res.data or []
+    with _get_conn() as conn:
+        rows = conn.execute(
+            "SELECT fdc_id, name, calories, protein, fat, carbs FROM food_cache"
+        ).fetchall()
     return {int(r["fdc_id"]): dict(r) for r in rows}
 
 
+# ---------------------------------------------------------------------------
+# User goals
+# ---------------------------------------------------------------------------
+
 def get_user_goals(username: str) -> dict:
-    sb = get_supabase()
-    res = (
-        sb.table("goals")
-        .select("macro,value")
-        .eq("username", username)
-        .execute()
-    )
-    rows = res.data or []
+    with _get_conn() as conn:
+        rows = conn.execute(
+            "SELECT macro, value FROM goals WHERE username = ?", (username,)
+        ).fetchall()
     goals = dict(DEFAULT_GOALS)
     for r in rows:
         goals[r["macro"]] = r["value"]
@@ -76,13 +128,38 @@ def get_user_goals(username: str) -> dict:
 
 
 def set_user_goals(username: str, goals: dict) -> None:
-    sb = get_supabase()
-    payload = [
-        {"username": username, "macro": macro, "value": value}
-        for macro, value in goals.items()
-    ]
-    sb.table("goals").upsert(payload, on_conflict="username,macro").execute()
+    with _get_conn() as conn:
+        for macro, value in goals.items():
+            conn.execute("""
+                INSERT INTO goals (username, macro, value) VALUES (?, ?, ?)
+                ON CONFLICT(username, macro) DO UPDATE SET value = excluded.value
+            """, (username, macro, value))
 
+
+# ---------------------------------------------------------------------------
+# Users  (used by auth.py — mirrors the old Supabase users table)
+# ---------------------------------------------------------------------------
+
+def get_user(username: str) -> Optional[dict]:
+    with _get_conn() as conn:
+        row = conn.execute(
+            "SELECT username, password FROM users WHERE username = ?", (username,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def create_user(username: str, password_hash: str) -> None:
+    """Raises sqlite3.IntegrityError if username already exists."""
+    with _get_conn() as conn:
+        conn.execute(
+            "INSERT INTO users (username, password) VALUES (?, ?)",
+            (username, password_hash),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Records
+# ---------------------------------------------------------------------------
 
 class Record:
     def __init__(self, timestamp, info, user_id, record_id):
@@ -94,73 +171,57 @@ class Record:
 
 class DBRecordManager:
     def create_record(self, user_id, timestamp, info):
-        sb = get_supabase()
-
-        # Step 1: create record
-        rec_res = (
-            sb.table("records")
-            .insert(
-                {
-                    "username": user_id,
-                    "timestamp": timestamp.isoformat(),
-                }
+        with _get_conn() as conn:
+            cur = conn.execute(
+                "INSERT INTO records (username, timestamp) VALUES (?, ?)",
+                (user_id, timestamp.isoformat()),
             )
-            .execute()
-        )
+            record_id = cur.lastrowid
 
-        record = rec_res.data[0]
-        record_id = record["id"]
-
-        # Step 2: insert log entries
-        payload = [
-            {
-                "record_id": record_id,
-                "fdc_id": int(fdc_id),
-                "quantity": quantity,
-            }
-            for fdc_id, quantity in info.items()
-        ]
-
-        if payload:
-            sb.table("log_entries").insert(payload).execute()
+            if info:
+                conn.executemany(
+                    "INSERT INTO log_entries (record_id, fdc_id, quantity) VALUES (?, ?, ?)",
+                    [(record_id, int(fdc_id), quantity) for fdc_id, quantity in info.items()],
+                )
 
     def query_user_records(self, user_id, start_time=None, end_time=None):
-        sb = get_supabase()
-
-        q = (
-            sb.table("log_entries")
-            .select("record_id, fdc_id, quantity, records!inner(username, timestamp)")
-            .eq("records.username", user_id)
-            .order("record_id")
-        )
+        query = """
+            SELECT le.record_id, le.fdc_id, le.quantity, r.timestamp
+            FROM log_entries le
+            JOIN records r ON le.record_id = r.id
+            WHERE r.username = ?
+        """
+        params: list = [user_id]
 
         if start_time:
-            q = q.gte("records.timestamp", start_time.isoformat())
+            query += " AND r.timestamp >= ?"
+            params.append(start_time.isoformat())
         if end_time:
-            q = q.lt("records.timestamp", end_time.isoformat())
+            query += " AND r.timestamp < ?"
+            params.append(end_time.isoformat())
 
-        res = q.execute()
-        rows = res.data or []
+        query += " ORDER BY le.record_id"
 
-        queries_by_record_id = OrderedDict()
-        record_timestamps = {}
+        with _get_conn() as conn:
+            rows = conn.execute(query, params).fetchall()
+
+        queries_by_record_id: OrderedDict = OrderedDict()
+        record_timestamps: dict = {}
 
         for row in rows:
             r_id = row["record_id"]
-            fdc_id = row["fdc_id"]
-            qty = row["quantity"]
-
-            ts_raw = row["records"]["timestamp"]
-            if isinstance(ts_raw, str) and ts_raw.endswith("Z"):
-                ts_raw = ts_raw[:-1] + "+00:00"
+            ts_raw = row["timestamp"]
 
             if r_id not in queries_by_record_id:
                 queries_by_record_id[r_id] = []
+                # Handle both 'Z' suffix (legacy) and plain ISO strings
+                if isinstance(ts_raw, str) and ts_raw.endswith("Z"):
+                    ts_raw = ts_raw[:-1] + "+00:00"
                 record_timestamps[r_id] = datetime.fromisoformat(ts_raw)
 
-            queries_by_record_id[r_id].append((fdc_id, qty))
+            queries_by_record_id[r_id].append((row["fdc_id"], row["quantity"]))
 
-        results = OrderedDict()
+        results: OrderedDict = OrderedDict()
         for r_id, queries in queries_by_record_id.items():
             results[r_id] = Record(
                 timestamp=record_timestamps[r_id],
@@ -172,7 +233,6 @@ class DBRecordManager:
         return results
 
     def remove_record(self, record_id):
-        sb = get_supabase()
-
-        sb.table("log_entries").delete().eq("record_id", record_id).execute()
-        sb.table("records").delete().eq("id", record_id).execute()       
+        with _get_conn() as conn:
+            # log_entries deleted automatically via ON DELETE CASCADE
+            conn.execute("DELETE FROM records WHERE id = ?", (record_id,))

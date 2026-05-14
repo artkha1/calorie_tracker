@@ -14,7 +14,7 @@ from storage.database import (
     init_db, DBRecordManager, save_food, load_food_cache,
     get_user_goals, set_user_goals
 )
-from ui.auth import bp as auth_bp, login_required
+from auth.auth import bp as auth_bp, login_required
 
 
 app = Flask(__name__)

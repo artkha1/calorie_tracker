@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: calorie-tracker
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --chdir . "ui.ui:app"
+    envVars:
+      - key: FDC_API_KEY
+        sync: false          # set manually in Render dashboard
+      - key: FLASK_SECRET_KEY
+        generateValue: true  # Render auto-generates a secure value

@@ -1,10 +1,10 @@
 import functools
+import sqlite3
 
 from flask import Blueprint, flash, g, redirect, request, session, url_for
-from postgrest.exceptions import APIError
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from storage.database import get_supabase
+from storage.database import get_user, create_user
 
 bp = Blueprint("auth", __name__, url_prefix="/auth")
 
@@ -22,21 +22,13 @@ def register():
             error = "Password is required."
 
         if error is None:
-            sb = get_supabase()
             try:
-                sb.table("users").insert(
-                    {
-                        "username": username,
-                        "password": generate_password_hash(password),
-                    }
-                ).execute()
+                create_user(username, generate_password_hash(password))
                 return redirect(url_for("index"))
-            except APIError as e:
-                msg = str(e).lower()
-                if "duplicate" in msg or "unique" in msg or "23505" in msg:
-                    error = "Username already exists."
-                else:
-                    error = "Registration failed."
+            except sqlite3.IntegrityError:
+                error = "Username already exists."
+            except Exception:
+                error = "Registration failed."
 
         if error:
             flash(error)
@@ -55,16 +47,7 @@ def login():
         password = request.form["password"]
         error = None
 
-        sb = get_supabase()
-        res = (
-            sb.table("users")
-            .select("username, password")
-            .eq("username", username)
-            .limit(1)
-            .execute()
-        )
-        rows = res.data or []
-        user = rows[0] if rows else None
+        user = get_user(username)
 
         if user is None:
             error = "Incorrect username."
@@ -73,7 +56,6 @@ def login():
 
         if error is None:
             session.clear()
-            # Session keyed by username — Supabase schema may not have users.id
             session["username"] = user["username"]
             return redirect(url_for("index"))
 
@@ -86,19 +68,7 @@ def login():
 @bp.before_app_request
 def load_logged_in_user():
     name = session.get("username")
-    if name is None:
-        g.user = None
-    else:
-        sb = get_supabase()
-        res = (
-            sb.table("users")
-            .select("*")
-            .eq("username", name)
-            .limit(1)
-            .execute()
-        )
-        rows = res.data or []
-        g.user = rows[0] if rows else None
+    g.user = get_user(name) if name else None
 
 
 @bp.route("/logout")

@@ -1,11 +1,9 @@
-streamlit
 pandas
 requests
 scikit-learn
 numpy
 usda-fdc
 flask
-flask-sqlalchemy
 python-dotenv
-supabase
+gunicorn
 pytest
