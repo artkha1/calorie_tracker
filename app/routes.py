@@ -9,7 +9,7 @@ thin glue between HTTP and the rest of the application.
 from collections import OrderedDict
 from datetime import datetime, timedelta
 
-from flask import Blueprint, g, render_template, request
+from flask import Blueprint, g, flash, redirect, render_template, request, url_for
 
 from api.nl_parser import is_natural_language, parse_food_input
 from api.nutrition_api import search_food
@@ -201,7 +201,7 @@ def set_goals():
 
     for macro in MACRO_TYPES:
         try:
-            val = int(request.form.get(f"goal_{macro}", goals[macro]))
+            val = int(float(request.form.get(f"goal_{macro}", goals[macro])))
             if val > 0:
                 goals[macro] = val
         except (ValueError, TypeError):
