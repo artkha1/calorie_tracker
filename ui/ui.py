@@ -10,6 +10,7 @@ load_dotenv(_PROJECT_ROOT / ".env")
 
 from flask import Flask, flash, g, redirect, render_template, request, url_for
 from api.nutrition_api import search_food
+from api.nl_parser import is_natural_language, parse_food_input
 from storage.database import (
     init_db, DBRecordManager, save_food, load_food_cache,
     get_user_goals, set_user_goals
@@ -163,17 +164,70 @@ def index():
 @login_required
 def handle_search():
     user = g.user["username"]
-    query = request.form.get('query')
+    query = request.form.get('query', '').strip()
+    start_date, end_date = get_selected_dates(request)
+    log_time = request.form.get('log_time')
 
+    nl_items = None      # list of {food, quantity} from parser
+    nl_logged = None     # list of {name, quantity, fdc_id} that were auto-logged
+    nl_record_id = None  # record id so the user can undo
+
+    if is_natural_language(query):
+        nl_items = parse_food_input(query)
+
+    if nl_items:
+        # For each parsed item, take the top FDC result and build a selection
+        auto_selection = {}   # fdc_id -> quantity
+        logged_details = []   # human-readable summary for the banner
+        all_results = []
+
+        for item in nl_items:
+            item_results = search_food(item["food"])
+            if not item_results:
+                continue
+            top = item_results[0]
+            fdc_id = int(top["fdc_id"])
+            qty = item["quantity"]
+            auto_selection[fdc_id] = auto_selection.get(fdc_id, 0) + qty
+            logged_details.append({"name": top["name"], "quantity": qty, "fdc_id": fdc_id})
+            for food in item_results:
+                if int(food["fdc_id"]) not in {int(r["fdc_id"]) for r in all_results}:
+                    all_results.append(food)
+
+        if auto_selection:
+            update_food_cache(all_results)
+            try:
+                ts = datetime.strptime(log_time, "%Y-%m-%dT%H:%M")
+            except (ValueError, TypeError):
+                ts = datetime.now()
+
+            record_manager.create_record(user, ts, auto_selection)
+
+            # Grab the id of the record we just created so the banner can undo it
+            records = record_manager.query_user_records(user, ts, ts + timedelta(minutes=1))
+            if records:
+                nl_record_id = list(records.keys())[-1]
+
+            search_results[user] = all_results
+            nl_logged = logged_details
+
+            return render_main(
+                start_date, end_date,
+                log_time=log_time,
+                nl_logged=nl_logged,
+                nl_record_id=nl_record_id,
+                nl_query=query,
+                open_login=False,
+                open_register=False,
+            )
+
+    # Plain search — either single-word query, NL parser off, or parse returned nothing
     results = search_food(query)
     search_results[user] = results
     update_food_cache(results)
 
-    start_date, end_date = get_selected_dates(request)
-    log_time = request.form.get('log_time')
     return render_main(
-        start_date, 
-        end_date,
+        start_date, end_date,
         log_time=log_time,
         open_login=request.args.get("login") == "1",
         open_register=request.args.get("register") == "1",

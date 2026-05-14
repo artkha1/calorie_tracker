@@ -135,3 +135,116 @@ def test_compute_goal_stats_exactly_at_goal():
         assert stats[macro]["remaining"] == 0
         assert stats[macro]["over"] == 0
         assert stats[macro]["progress"] == 100.0
+
+
+# ---------------------------------------------------------------------------
+# nl_parser tests
+# ---------------------------------------------------------------------------
+
+from api.nl_parser import is_natural_language, parse_food_input
+
+
+class TestIsNaturalLanguage:
+    def test_single_word_is_not_nl(self):
+        assert is_natural_language("apple") is False
+
+    def test_two_words_is_nl(self):
+        assert is_natural_language("chicken breast") is True
+
+    def test_starts_with_digit_is_nl(self):
+        assert is_natural_language("2 eggs") is True
+
+    def test_single_digit_word_is_nl(self):
+        assert is_natural_language("3 oranges") is True
+
+    def test_full_sentence_is_nl(self):
+        assert is_natural_language("2 eggs and a slice of toast") is True
+
+    def test_empty_string_is_not_nl(self):
+        assert is_natural_language("") is False
+
+    def test_whitespace_only_is_not_nl(self):
+        assert is_natural_language("   ") is False
+
+
+class TestParseFoodInput:
+    """All tests mock the Gemini API — no network calls, no API key needed."""
+
+    def _make_mock_model(self, response_text):
+        """Return a mock that mimics the google-genai Client."""
+        mock_response = MagicMock()
+        mock_response.text = response_text
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = mock_response
+        return mock_client
+
+    def test_basic_parse(self):
+        mock_model = self._make_mock_model(
+            '[{"food": "egg", "quantity": 2}, {"food": "toast", "quantity": 1}]'
+        )
+        with patch("api.nl_parser._get_model", return_value=mock_model):
+            result = parse_food_input("2 eggs and a toast")
+        assert result == [
+            {"food": "egg", "quantity": 2.0},
+            {"food": "toast", "quantity": 1.0},
+        ]
+
+    def test_quantity_is_float(self):
+        mock_model = self._make_mock_model(
+            '[{"food": "oatmeal", "quantity": 0.5}]'
+        )
+        with patch("api.nl_parser._get_model", return_value=mock_model):
+            result = parse_food_input("half a cup of oatmeal")
+        assert result[0]["quantity"] == 0.5
+
+    def test_strips_markdown_fences(self):
+        mock_model = self._make_mock_model(
+            '```json\n[{"food": "banana", "quantity": 1}]\n```'
+        )
+        with patch("api.nl_parser._get_model", return_value=mock_model):
+            result = parse_food_input("a banana")
+        assert result == [{"food": "banana", "quantity": 1.0}]
+
+    def test_returns_none_on_invalid_json(self):
+        mock_model = self._make_mock_model("not valid json at all")
+        with patch("api.nl_parser._get_model", return_value=mock_model):
+            result = parse_food_input("something")
+        assert result is None
+
+    def test_returns_none_when_no_api_key(self):
+        with patch("api.nl_parser._get_model", return_value=None):
+            result = parse_food_input("2 eggs and toast")
+        assert result is None
+
+    def test_returns_none_on_non_list_response(self):
+        mock_model = self._make_mock_model('{"food": "egg", "quantity": 2}')
+        with patch("api.nl_parser._get_model", return_value=mock_model):
+            result = parse_food_input("2 eggs")
+        assert result is None
+
+    def test_skips_malformed_items(self):
+        # One valid item, one missing 'quantity' — only valid one returned
+        mock_model = self._make_mock_model(
+            '[{"food": "egg", "quantity": 2}, {"food": "toast"}]'
+        )
+        with patch("api.nl_parser._get_model", return_value=mock_model):
+            result = parse_food_input("2 eggs and toast")
+        assert result == [{"food": "egg", "quantity": 2.0}]
+
+    def test_multiple_items(self):
+        mock_model = self._make_mock_model(
+            '[{"food": "pizza slice", "quantity": 3}, '
+            '{"food": "cola", "quantity": 1}]'
+        )
+        with patch("api.nl_parser._get_model", return_value=mock_model):
+            result = parse_food_input("3 slices of pizza and a coke")
+        assert len(result) == 2
+        assert result[0] == {"food": "pizza slice", "quantity": 3.0}
+        assert result[1] == {"food": "cola", "quantity": 1.0}
+
+    def test_returns_none_on_api_exception(self):
+        mock_client = MagicMock()
+        mock_client.models.generate_content.side_effect = Exception("network error")
+        with patch("api.nl_parser._get_model", return_value=mock_client):
+            result = parse_food_input("2 eggs")
+        assert result is None

@@ -6,4 +6,5 @@ usda-fdc
 flask
 python-dotenv
 gunicorn
+google-genai
 pytest
